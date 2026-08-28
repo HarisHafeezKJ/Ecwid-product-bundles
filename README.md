@@ -54,7 +54,22 @@ All app data is stored in **Ecwid Application Storage** per installed store:
 
 OAuth tokens are also mirrored to `server/data/oauth-cache.json` locally so storefront APIs work after server restarts (bootstrap only — not app data).
 
-## Quick start
+## Deploying to Vercel
+
+This is an npm **monorepo**. Vercel must install and build from the workspace root so `@pb/shared` is linked.
+
+**Recommended:** set **Root Directory** to `.` (repository root). `vercel.json` at the repo root handles install/build.
+
+**If Root Directory is `server`:** `server/vercel.json` runs `cd .. && npm install` and `cd .. && npm run build` so workspace packages resolve.
+
+Set these environment variables in the Vercel dashboard (or use `.env` committed only for non-secrets — secrets go in Vercel env UI):
+
+- `ECWID_CLIENT_ID`
+- `ECWID_CLIENT_SECRET`
+- `PORT` (optional; Vercel sets this automatically)
+
+The Express app exports as a serverless function when `VERCEL=1` (automatic on Vercel).
+
 
 ```bash
 npm install

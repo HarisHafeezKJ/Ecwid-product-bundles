@@ -75,7 +75,11 @@ app.use((err: Error, req: express.Request, res: express.Response, _next: express
   res.status(500).set(corsHeaders(req)).json({ ok: false, error: err.message });
 });
 
-app.listen(port, () => {
-  console.log(`Product Bundles server listening on http://localhost:${port}`);
-  console.log(`Admin UI: http://localhost:${port}${manifest.paths.adminMount}`);
-});
+export default app;
+
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`Product Bundles server listening on http://localhost:${port}`);
+    console.log(`Admin UI: http://localhost:${port}${manifest.paths.adminMount}`);
+  });
+}

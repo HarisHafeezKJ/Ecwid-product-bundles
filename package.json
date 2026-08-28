@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w admin\" \"npm run dev -w storefront\"",
     "build": "npm run build -w packages/shared && npm run build -w server && npm run build -w admin && npm run build -w storefront",
+    "vercel-build": "npm run build",
     "start": "npm run start -w server"
   },
   "devDependencies": {
