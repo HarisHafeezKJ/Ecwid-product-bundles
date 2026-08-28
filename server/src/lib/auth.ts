@@ -12,6 +12,7 @@ import {
 import type { EcwidStoreTokens } from './ecwid.js';
 import {
   getOAuthTokens,
+  hydrateOAuthCache,
   persistOAuthTokens,
   refreshOAuthFromStorage,
 } from './storage/oauth-cache.js';
@@ -65,6 +66,12 @@ function parseSessionCookie(cookieHeader: string | undefined): PbSession | undef
 
 export function sessionMiddleware(req: Request, _res: Response, next: NextFunction): void {
   req.session = parseSessionCookie(req.headers.cookie) ?? {};
+  if (req.session.storeId && req.session.accessToken) {
+    hydrateOAuthCache(req.session.storeId, req.session.accessToken);
+    // #region agent log
+    fetch('http://127.0.0.1:7627/ingest/17a22ea5-cb1e-474a-bba3-194752c05bb0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c36960'},body:JSON.stringify({sessionId:'c36960',location:'auth.ts:sessionMiddleware',message:'Hydrated OAuth cache from session',data:{storeId:req.session.storeId,hasAccessToken:!!req.session.accessToken},timestamp:Date.now(),hypothesisId:'H',runId:'post-fix'})}).catch(()=>{});
+    // #endregion
+  }
   next();
 }
 

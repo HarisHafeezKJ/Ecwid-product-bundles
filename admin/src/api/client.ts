@@ -6,6 +6,10 @@ const JSON_HEADERS = {
 };
 
 async function parseJson<T>(res: Response): Promise<T> {
+  if (res.status === 401) {
+    window.location.href = '/api/auth/install';
+    throw new Error('Redirecting to sign in…');
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     const message =

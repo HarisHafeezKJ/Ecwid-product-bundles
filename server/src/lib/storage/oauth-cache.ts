@@ -32,6 +32,24 @@ function writeFileCache(data: Record<string, OAuthDoc>): void {
   fs.writeFileSync(cacheFile, JSON.stringify(data, null, 2), 'utf8');
 }
 
+/** Restore in-memory (and /tmp) token cache from a signed session cookie — required on Vercel cold starts. */
+export function hydrateOAuthCache(
+  storeId: string,
+  accessToken: string,
+  publicToken?: string,
+): void {
+  const tokens: EcwidStoreTokens = { storeId, accessToken, publicToken };
+  memory.set(storeId, tokens);
+
+  const file = readFileCache();
+  file[storeId] = {
+    accessToken,
+    publicToken,
+    updatedAt: new Date().toISOString(),
+  };
+  writeFileCache(file);
+}
+
 /** Persist OAuth tokens to Ecwid app storage + local bootstrap file. */
 export async function persistOAuthTokens(
   storeId: string,
