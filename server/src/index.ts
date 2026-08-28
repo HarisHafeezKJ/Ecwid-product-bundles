@@ -1,10 +1,9 @@
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { corsHeaders, isAllowedOrigin, jsonResponse } from './lib/api-response.js';
-import { getManifest, getPort, loadEnvFiles } from './lib/config.js';
+import { getManifest, getPort, getRepoRoot, loadEnvFiles } from './lib/config.js';
 import { sessionMiddleware } from './lib/auth.js';
 import { authRouter } from './routes/auth.js';
 import { rulesRouter } from './routes/dashboard/rules.js';
@@ -18,7 +17,7 @@ import { ordersWebhookRouter } from './routes/webhooks/orders.js';
 
 loadEnvFiles();
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = getRepoRoot();
 const manifest = getManifest();
 const app = express();
 const port = getPort();
@@ -58,10 +57,10 @@ app.use('/api/storefront/cart-upsell', cartUpsellRouter);
 app.use('/api/storefront/sync-volume-cart', syncVolumeCartRouter);
 app.use('/api/webhooks/orders', ordersWebhookRouter);
 
-const storefrontDist = path.resolve(__dirname, '../../storefront/dist');
+const storefrontDist = path.join(repoRoot, 'storefront/dist');
 app.use('/storefront', express.static(storefrontDist));
 
-const adminDist = path.resolve(__dirname, '../../admin/dist');
+const adminDist = path.join(repoRoot, 'admin/dist');
 app.use(manifest.paths.adminMount, express.static(adminDist));
 app.get(manifest.paths.adminMount, (_req, res) => {
   res.sendFile(path.join(adminDist, 'index.html'));

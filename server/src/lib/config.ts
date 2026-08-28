@@ -5,7 +5,16 @@ import dotenv from 'dotenv';
 import type { Request } from 'express';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, '../../..');
+
+/** Monorepo root — works locally and on Vercel (Root Directory = server). */
+export function getRepoRoot(): string {
+  if (process.env.VERCEL) {
+    return path.resolve(process.cwd(), '..');
+  }
+  return path.resolve(__dirname, '../../..');
+}
+
+const repoRoot = getRepoRoot();
 
 export interface AppManifest {
   name: string;

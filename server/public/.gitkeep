@@ -1,0 +1,2 @@
+# Placeholder so Vercel static output step succeeds.
+# All traffic is routed to the Express serverless function via rewrites.

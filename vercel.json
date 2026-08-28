@@ -3,7 +3,13 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build",
   "framework": null,
+  "outputDirectory": "public",
+  "functions": {
+    "api/index.ts": {
+      "includeFiles": "admin/dist/**,storefront/dist/**,app.manifest.json"
+    }
+  },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/server/src/index.ts" }
+    { "source": "/(.*)", "destination": "/api/index" }
   ]
 }

@@ -6,7 +6,9 @@ import { getManifest } from '../config.js';
 import { readStorageJson, writeStorageJson } from './ecwid-storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const cacheFile = path.resolve(__dirname, '../../../data/oauth-cache.json');
+const cacheFile = process.env.VERCEL
+  ? path.join('/tmp', 'pb-oauth-cache.json')
+  : path.resolve(__dirname, '../../../data/oauth-cache.json');
 
 type OAuthDoc = {
   accessToken: string;
