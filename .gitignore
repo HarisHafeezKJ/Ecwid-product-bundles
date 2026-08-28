@@ -4,6 +4,7 @@ build/
 .env.local
 .env.*.local
 server/.env
+server/static/
 *.db
 *.db-journal
 server/data/

@@ -106,6 +106,30 @@ export function getManifest(): AppManifest {
   return manifestCache;
 }
 
+export function getAdminDistPath(): string {
+  const candidates = [
+    path.join(getRepoRoot(), 'admin', 'dist'),
+    path.resolve(__dirname, '../../static/admin'),
+    path.join(process.cwd(), 'static', 'admin'),
+  ];
+  for (const candidate of candidates) {
+    if (pathExists(path.join(candidate, 'index.html'))) return candidate;
+  }
+  return candidates[0]!;
+}
+
+export function getStorefrontDistPath(): string {
+  const candidates = [
+    path.join(getRepoRoot(), 'storefront', 'dist'),
+    path.resolve(__dirname, '../../static/storefront'),
+    path.join(process.cwd(), 'static', 'storefront'),
+  ];
+  for (const candidate of candidates) {
+    if (pathExists(path.join(candidate, 'pb-bundles.js'))) return candidate;
+  }
+  return candidates[0]!;
+}
+
 export function getPort(): number {
   loadEnvFiles();
   const port = Number(process.env.PORT ?? 3001);
