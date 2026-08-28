@@ -1,0 +1,104 @@
+#pb-cart-upsell {
+  margin: 1.5rem 0;
+  font-family: inherit;
+}
+
+#pb-upsell-config {
+  display: none;
+}
+
+.pb-upsell {
+  border: 1px solid var(--pb-upsell-card-border, #e5e7eb);
+  border-radius: 12px;
+  padding: 1rem;
+  background: var(--pb-upsell-card-bg, #fff);
+}
+
+.pb-upsell + .pb-upsell {
+  margin-top: 1rem;
+}
+
+.pb-upsell__title {
+  margin: 0 0 1rem;
+  font-size: var(--pb-block-title-size, 18px);
+  color: var(--pb-block-title-color, #111827);
+}
+
+.pb-upsell__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.pb-upsell__card {
+  border: 1px solid var(--pb-upsell-card-border, #e5e7eb);
+  border-radius: 10px;
+  padding: 0.75rem;
+  background: var(--pb-upsell-card-bg, #fff);
+}
+
+.pb-upsell__card--selected {
+  border-color: var(--pb-upsell-selected-border, #2563eb);
+  background: var(--pb-upsell-selected-bg, #eff6ff);
+}
+
+.pb-upsell__img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  background: #f3f4f6;
+}
+
+.pb-upsell__name {
+  font-size: var(--pb-upsell-title-size, 14px);
+  color: var(--pb-upsell-title-color, #111827);
+  margin: 0 0 0.25rem;
+}
+
+.pb-upsell__price {
+  font-size: var(--pb-upsell-price-size, 14px);
+  color: var(--pb-upsell-price-color, #374151);
+}
+
+.pb-upsell__select-btn {
+  margin-top: 0.5rem;
+  width: 100%;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.pb-upsell__checkout {
+  margin-top: 1rem;
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  background: var(--pb-checkout-cta-bg, #111827);
+  color: var(--pb-checkout-cta-color, #fff);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.pb-upsell__checkout:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pb-upsell__error {
+  margin-top: 0.75rem;
+  color: #b91c1c;
+  font-size: 14px;
+}
+
+.pb-upsell__variant {
+  margin-top: 0.35rem;
+  width: 100%;
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+}

@@ -1,0 +1,31 @@
+{
+  "name": "Product Bundles & Upsells",
+  "version": "1.0.0",
+  "description": "Quantity breaks, bundles, mix & match, and cart upsells for Ecwid stores",
+  "scopes": [
+    "read_store_profile",
+    "update_store_profile",
+    "read_catalog",
+    "update_catalog",
+    "update_orders",
+    "public_storefront",
+    "customize_cart_calculation"
+  ],
+  "paths": {
+    "oauthCallback": "/api/auth/callback",
+    "oauthInstall": "/api/auth/install",
+    "webhook": "/api/webhooks/orders",
+    "storefrontScript": "/storefront/pb-bundles.js",
+    "storefrontApi": "/api/storefront",
+    "dashboardApi": "/api/dashboard",
+    "adminMount": "/admin",
+    "health": "/health"
+  },
+  "storage": {
+    "rules": "pb_rules",
+    "settings": "pb_settings",
+    "impressions": "pb_impressions",
+    "oauth": "pb_oauth",
+    "public": "public"
+  }
+}
