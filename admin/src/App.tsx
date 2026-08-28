@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { RuleType } from '@pb/shared';
+import { checkDashboardSession } from './api/session';
 import DashboardHome from './pages/DashboardHome';
 import OfferEditor from './pages/OfferEditor';
 import { blankDraft } from './components/editor/editor-draft';
@@ -15,18 +16,13 @@ function App() {
   const [listEpoch, setListEpoch] = useState(0);
 
   useEffect(() => {
-    fetch('/api/auth/session', { credentials: 'include' })
-      .then((res) => res.json())
-      .then((data: { authenticated?: boolean }) => {
-        if (!data.authenticated) {
-          window.location.href = '/api/auth/install';
-          return;
-        }
-        setAuthReady(true);
-      })
-      .catch(() => {
+    void checkDashboardSession().then((authenticated) => {
+      if (!authenticated) {
         window.location.href = '/api/auth/install';
-      });
+        return;
+      }
+      setAuthReady(true);
+    });
   }, []);
 
   const openCreate = useCallback((ruleType: RuleType) => {

@@ -1,9 +1,9 @@
 import type { AppSettings, BundleRule, CatalogProduct, RuleStatus } from '@pb/shared';
+import { dashboardAuthHeaders } from './session';
 
-const JSON_HEADERS = {
-  Accept: 'application/json',
-  'Content-Type': 'application/json',
-};
+function requestHeaders(): Record<string, string> {
+  return dashboardAuthHeaders();
+}
 
 async function parseJson<T>(res: Response): Promise<T> {
   if (res.status === 401) {
@@ -33,13 +33,13 @@ function apiUrl(path: string, query?: Record<string, string | undefined>): strin
 }
 
 export async function listRules(): Promise<BundleRule[]> {
-  const res = await fetch(apiUrl('/rules'), { credentials: 'include', headers: JSON_HEADERS });
+  const res = await fetch(apiUrl('/rules'), { credentials: 'include', headers: requestHeaders() });
   const data = await parseJson<{ rules: BundleRule[] }>(res);
   return data.rules ?? [];
 }
 
 export async function getRule(id: string): Promise<BundleRule> {
-  const res = await fetch(apiUrl(`/rules/${id}`), { credentials: 'include', headers: JSON_HEADERS });
+  const res = await fetch(apiUrl(`/rules/${id}`), { credentials: 'include', headers: requestHeaders() });
   const data = await parseJson<{ rule: BundleRule }>(res);
   return data.rule;
 }
@@ -48,7 +48,7 @@ export async function saveRule(input: Record<string, unknown>): Promise<BundleRu
   const res = await fetch(apiUrl('/rules'), {
     method: 'POST',
     credentials: 'include',
-    headers: JSON_HEADERS,
+    headers: requestHeaders(),
     body: JSON.stringify(input),
   });
   const data = await parseJson<{ rule: BundleRule }>(res);
@@ -59,7 +59,7 @@ export async function deleteRule(id: string): Promise<void> {
   const res = await fetch(apiUrl(`/rules/${id}`), {
     method: 'DELETE',
     credentials: 'include',
-    headers: JSON_HEADERS,
+    headers: requestHeaders(),
   });
   await parseJson(res);
 }
@@ -68,7 +68,7 @@ export async function setRuleStatus(id: string, status: RuleStatus): Promise<Bun
   const res = await fetch(apiUrl(`/rules/${id}/status`), {
     method: 'PATCH',
     credentials: 'include',
-    headers: JSON_HEADERS,
+    headers: requestHeaders(),
     body: JSON.stringify({ status }),
   });
   const data = await parseJson<{ rule: BundleRule }>(res);
@@ -76,7 +76,7 @@ export async function setRuleStatus(id: string, status: RuleStatus): Promise<Bun
 }
 
 export async function loadSettings(): Promise<AppSettings> {
-  const res = await fetch(apiUrl('/settings'), { credentials: 'include', headers: JSON_HEADERS });
+  const res = await fetch(apiUrl('/settings'), { credentials: 'include', headers: requestHeaders() });
   const data = await parseJson<{ settings: AppSettings }>(res);
   return data.settings;
 }
@@ -84,7 +84,7 @@ export async function loadSettings(): Promise<AppSettings> {
 export async function searchProducts(query: string, limit = 24): Promise<CatalogProduct[]> {
   const res = await fetch(apiUrl('/products', { search: query, limit: String(limit) }), {
     credentials: 'include',
-    headers: JSON_HEADERS,
+    headers: requestHeaders(),
   });
   const data = await parseJson<{ products: CatalogProduct[] }>(res);
   return data.products ?? [];
@@ -94,7 +94,7 @@ export async function setCartScriptEnabled(enabled: boolean): Promise<void> {
   const res = await fetch(apiUrl('/settings/cart-upsell'), {
     method: 'PATCH',
     credentials: 'include',
-    headers: JSON_HEADERS,
+    headers: requestHeaders(),
     body: JSON.stringify({ enabled }),
   });
   await parseJson(res);

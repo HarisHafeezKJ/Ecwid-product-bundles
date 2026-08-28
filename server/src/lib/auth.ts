@@ -64,29 +64,62 @@ function parseSessionCookie(cookieHeader: string | undefined): PbSession | undef
   return decodeSessionPayload(raw);
 }
 
+function sessionCookieOptions(): {
+  httpOnly: boolean;
+  sameSite: 'lax' | 'none';
+  secure: boolean;
+  maxAge: number;
+  partitioned?: boolean;
+} {
+  if (isProduction()) {
+    return {
+      httpOnly: true,
+      // Required when Ecwid admin embeds this app in a cross-site iframe (Chrome blocks Lax cookies).
+      sameSite: 'none',
+      secure: true,
+      partitioned: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    };
+  }
+  return {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: false,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  };
+}
+
+function parseBearerSession(authHeader: string | undefined): PbSession | undefined {
+  if (!authHeader?.startsWith('Bearer ')) return undefined;
+  return decodeSessionPayload(authHeader.slice(7).trim());
+}
+
 export function sessionMiddleware(req: Request, _res: Response, next: NextFunction): void {
-  req.session = parseSessionCookie(req.headers.cookie) ?? {};
+  const fromCookie = parseSessionCookie(req.headers.cookie);
+  const fromBearer = parseBearerSession(req.headers.authorization);
+  req.session = fromCookie ?? fromBearer ?? {};
+
   if (req.session.storeId && req.session.accessToken) {
     hydrateOAuthCache(req.session.storeId, req.session.accessToken);
     // #region agent log
-    fetch('http://127.0.0.1:7627/ingest/17a22ea5-cb1e-474a-bba3-194752c05bb0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c36960'},body:JSON.stringify({sessionId:'c36960',location:'auth.ts:sessionMiddleware',message:'Hydrated OAuth cache from session',data:{storeId:req.session.storeId,hasAccessToken:!!req.session.accessToken},timestamp:Date.now(),hypothesisId:'H',runId:'post-fix'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7627/ingest/17a22ea5-cb1e-474a-bba3-194752c05bb0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c36960'},body:JSON.stringify({sessionId:'c36960',location:'auth.ts:sessionMiddleware',message:'Session resolved',data:{storeId:req.session.storeId,source:fromCookie?'cookie':fromBearer?'bearer':'none',secFetchSite:req.headers['sec-fetch-site']},timestamp:Date.now(),hypothesisId:'I',runId:'post-fix'})}).catch(()=>{});
     // #endregion
   }
   next();
 }
 
-export function setSession(res: Response, storeId: string, accessToken: string): void {
-  const value = encodeSessionPayload(storeId, accessToken);
-  res.cookie(SESSION_COOKIE, value, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: isProduction(),
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+export function createSessionToken(storeId: string, accessToken: string): string {
+  return encodeSessionPayload(storeId, accessToken);
+}
+
+export function setSession(res: Response, storeId: string, accessToken: string): string {
+  const value = createSessionToken(storeId, accessToken);
+  res.cookie(SESSION_COOKIE, value, sessionCookieOptions());
+  return value;
 }
 
 export function clearSession(res: Response): void {
-  res.clearCookie(SESSION_COOKIE);
+  res.clearCookie(SESSION_COOKIE, sessionCookieOptions());
 }
 
 export function ecwidInstallUrl(req: Request): string {
