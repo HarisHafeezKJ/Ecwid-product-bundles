@@ -3,18 +3,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import type { Request } from 'express';
+import manifestJson from '../app.manifest.json' with { type: 'json' };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-/** Monorepo root — works locally and on Vercel (Root Directory = server). */
-export function getRepoRoot(): string {
-  if (process.env.VERCEL) {
-    return path.resolve(process.cwd(), '..');
-  }
-  return path.resolve(__dirname, '../../..');
-}
-
-const repoRoot = getRepoRoot();
 
 export interface AppManifest {
   name: string;
@@ -42,17 +33,48 @@ export interface AppManifest {
 
 let envLoaded = false;
 
-/** Load secrets from .env files only (host env vars are not required). */
+function pathExists(filePath: string): boolean {
+  try {
+    return fs.existsSync(filePath);
+  } catch {
+    return false;
+  }
+}
+
+/** Monorepo root — resolves correctly on Vercel and locally. */
+export function getRepoRoot(): string {
+  const candidates = [
+    path.resolve(__dirname, '../../..'),
+    path.resolve(__dirname, '../..'),
+    path.resolve(process.cwd(), '..'),
+    process.cwd(),
+  ];
+
+  for (const root of candidates) {
+    if (
+      pathExists(path.join(root, 'admin', 'dist', 'index.html')) ||
+      pathExists(path.join(root, 'storefront', 'dist', 'pb-bundles.js')) ||
+      pathExists(path.join(root, 'app.manifest.json'))
+    ) {
+      return root;
+    }
+  }
+
+  return path.resolve(__dirname, '../../..');
+}
+
+/** Load secrets from .env files (does not override Vercel/host env vars). */
 export function loadEnvFiles(): void {
   if (envLoaded) return;
+  const root = getRepoRoot();
   const candidates = [
-    path.join(repoRoot, '.env'),
-    path.join(repoRoot, 'server', '.env'),
+    path.join(root, '.env'),
+    path.join(root, 'server', '.env'),
     path.join(process.cwd(), '.env'),
     path.join(process.cwd(), 'server', '.env'),
   ];
   for (const file of candidates) {
-    if (fs.existsSync(file)) {
+    if (pathExists(file)) {
       dotenv.config({ path: file, override: false });
     }
   }
@@ -63,9 +85,22 @@ let manifestCache: AppManifest | null = null;
 
 export function getManifest(): AppManifest {
   if (manifestCache) return manifestCache;
-  const manifestPath = path.join(repoRoot, 'app.manifest.json');
-  const raw = fs.readFileSync(manifestPath, 'utf8');
-  manifestCache = JSON.parse(raw) as AppManifest;
+
+  const candidates = [
+    path.join(getRepoRoot(), 'app.manifest.json'),
+    path.join(process.cwd(), 'app.manifest.json'),
+    path.join(process.cwd(), '..', 'app.manifest.json'),
+    path.join(__dirname, '../app.manifest.json'),
+  ];
+
+  for (const manifestPath of candidates) {
+    if (pathExists(manifestPath)) {
+      manifestCache = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as AppManifest;
+      return manifestCache;
+    }
+  }
+
+  manifestCache = manifestJson as AppManifest;
   return manifestCache;
 }
 
@@ -78,14 +113,18 @@ export function getPort(): number {
 export function getEcwidClientId(): string {
   loadEnvFiles();
   const id = process.env.ECWID_CLIENT_ID?.trim();
-  if (!id) throw new Error('ECWID_CLIENT_ID is missing from .env');
+  if (!id) {
+    throw new Error('ECWID_CLIENT_ID is missing. Add it to .env or Vercel Environment Variables.');
+  }
   return id;
 }
 
 export function getEcwidClientSecret(): string {
   loadEnvFiles();
   const secret = process.env.ECWID_CLIENT_SECRET?.trim();
-  if (!secret) throw new Error('ECWID_CLIENT_SECRET is missing from .env');
+  if (!secret) {
+    throw new Error('ECWID_CLIENT_SECRET is missing. Add it to .env or Vercel Environment Variables.');
+  }
   return secret;
 }
 
