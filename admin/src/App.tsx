@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { RuleType } from '@pb/shared';
 import DashboardHome from './pages/DashboardHome';
 import OfferEditor from './pages/OfferEditor';
@@ -10,8 +10,24 @@ type View =
   | { name: 'editor'; mode: 'create' | 'edit'; draft: OfferDraft };
 
 function App() {
+  const [authReady, setAuthReady] = useState(false);
   const [view, setView] = useState<View>({ name: 'home' });
   const [listEpoch, setListEpoch] = useState(0);
+
+  useEffect(() => {
+    fetch('/api/auth/session', { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data: { authenticated?: boolean }) => {
+        if (!data.authenticated) {
+          window.location.href = '/api/auth/install';
+          return;
+        }
+        setAuthReady(true);
+      })
+      .catch(() => {
+        window.location.href = '/api/auth/install';
+      });
+  }, []);
 
   const openCreate = useCallback((ruleType: RuleType) => {
     setView({ name: 'editor', mode: 'create', draft: blankDraft(ruleType) });
@@ -25,6 +41,14 @@ function App() {
     setView({ name: 'home' });
     if (saved) setListEpoch((n) => n + 1);
   }, []);
+
+  if (!authReady) {
+    return (
+      <div className="app-shell">
+        <main className="app-main">Loading…</main>
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell">

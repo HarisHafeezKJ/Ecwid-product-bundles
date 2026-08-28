@@ -32,6 +32,20 @@ function writeFileCache(data: Record<string, OAuthDoc>): void {
   fs.writeFileSync(cacheFile, JSON.stringify(data, null, 2), 'utf8');
 }
 
+/** Resolve API tokens: cache first, then signed session cookie (Vercel cold starts). */
+export async function resolveStoreTokens(
+  storeId: string,
+  sessionAccessToken?: string,
+): Promise<EcwidStoreTokens> {
+  const cached = await getOAuthTokens(storeId);
+  if (cached?.accessToken) return cached;
+  if (sessionAccessToken) {
+    hydrateOAuthCache(storeId, sessionAccessToken);
+    return { storeId, accessToken: sessionAccessToken };
+  }
+  throw new Error('Store not authenticated');
+}
+
 /** Restore in-memory (and /tmp) token cache from a signed session cookie — required on Vercel cold starts. */
 export function hydrateOAuthCache(
   storeId: string,

@@ -4,7 +4,7 @@ import {
   mergeSettings,
   viewLimitForPlan,
 } from '@pb/shared';
-import { getOAuthTokens } from '../storage/oauth-cache.js';
+import { resolveStoreTokens } from '../storage/oauth-cache.js';
 import {
   readStorageJson,
   storageKeys,
@@ -64,27 +64,32 @@ function mapSettings(storeId: string, row: StoredSettingsDoc): AppSettings {
   };
 }
 
-async function loadDoc(storeId: string): Promise<StoredSettingsDoc> {
-  const tokens = await getOAuthTokens(storeId);
-  if (!tokens) throw new Error('Store not authenticated');
+async function loadDoc(storeId: string, sessionAccessToken?: string): Promise<StoredSettingsDoc> {
+  const tokens = await resolveStoreTokens(storeId, sessionAccessToken);
   const doc = await readStorageJson<StoredSettingsDoc>(tokens, storageKeys().settings);
   return doc ?? defaultDoc(storeId);
 }
 
-async function saveDoc(storeId: string, doc: StoredSettingsDoc): Promise<void> {
-  const tokens = await getOAuthTokens(storeId);
-  if (!tokens) throw new Error('Store not authenticated');
+async function saveDoc(
+  storeId: string,
+  doc: StoredSettingsDoc,
+  sessionAccessToken?: string,
+): Promise<void> {
+  const tokens = await resolveStoreTokens(storeId, sessionAccessToken);
   await writeStorageJson(tokens, storageKeys().settings, doc);
   await writePublicConfig(tokens, {
     cartUpsellEnabled: doc.cartUpsellEnabled,
   });
 }
 
-export async function loadAppSettings(storeId: string): Promise<AppSettings> {
-  const doc = await loadDoc(storeId);
+export async function loadAppSettings(
+  storeId: string,
+  sessionAccessToken?: string,
+): Promise<AppSettings> {
+  const doc = await loadDoc(storeId, sessionAccessToken);
   if (!doc.viewsPeriod) {
     doc.viewsPeriod = currentViewsPeriod();
-    await saveDoc(storeId, doc);
+    await saveDoc(storeId, doc, sessionAccessToken);
   }
   return mapSettings(storeId, doc);
 }
@@ -92,8 +97,9 @@ export async function loadAppSettings(storeId: string): Promise<AppSettings> {
 export async function saveAppSettings(
   storeId: string,
   partial: Partial<AppSettings>,
+  sessionAccessToken?: string,
 ): Promise<AppSettings> {
-  const doc = await loadDoc(storeId);
+  const doc = await loadDoc(storeId, sessionAccessToken);
   if (partial.title != null) doc.title = partial.title;
   if (partial.widgetTitle != null) doc.widgetTitle = partial.widgetTitle;
   if (partial.buttonLabel != null) doc.buttonLabel = partial.buttonLabel;
@@ -106,12 +112,15 @@ export async function saveAppSettings(
     doc.monthlyViewsLimit = viewLimitForPlan(partial.planTier);
   }
   if (partial.monthlyViewsLimit != null) doc.monthlyViewsLimit = partial.monthlyViewsLimit;
-  await saveDoc(storeId, doc);
+  await saveDoc(storeId, doc, sessionAccessToken);
   return mapSettings(storeId, doc);
 }
 
-export async function incrementMonthlyViews(storeId: string): Promise<AppSettings> {
-  const doc = await loadDoc(storeId);
+export async function incrementMonthlyViews(
+  storeId: string,
+  sessionAccessToken?: string,
+): Promise<AppSettings> {
+  const doc = await loadDoc(storeId, sessionAccessToken);
   const period = currentViewsPeriod();
 
   if (doc.viewsPeriod !== period) {
@@ -122,12 +131,16 @@ export async function incrementMonthlyViews(storeId: string): Promise<AppSetting
     doc.currentViewsCount += 1;
   }
 
-  await saveDoc(storeId, doc);
+  await saveDoc(storeId, doc, sessionAccessToken);
   return mapSettings(storeId, doc);
 }
 
-export async function setCartUpsellEnabled(storeId: string, enabled: boolean): Promise<void> {
-  const doc = await loadDoc(storeId);
+export async function setCartUpsellEnabled(
+  storeId: string,
+  enabled: boolean,
+  sessionAccessToken?: string,
+): Promise<void> {
+  const doc = await loadDoc(storeId, sessionAccessToken);
   doc.cartUpsellEnabled = enabled;
-  await saveDoc(storeId, doc);
+  await saveDoc(storeId, doc, sessionAccessToken);
 }

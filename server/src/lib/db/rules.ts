@@ -7,35 +7,44 @@ import {
   parseVolumeTiers,
   defaultWidgetStyle,
 } from '@pb/shared';
-import { getOAuthTokens } from '../storage/oauth-cache.js';
+import { resolveStoreTokens } from '../storage/oauth-cache.js';
 import { readStorageJson, storageKeys, writeStorageJson } from '../storage/ecwid-storage.js';
 import { mapStoredRule, ruleInputFromBody, type StoredRuleRow, type StoredRulesDoc } from './mappers.js';
 
 const EMPTY_IDS: string[] = [];
 
-async function loadRulesDoc(storeId: string): Promise<StoredRulesDoc> {
-  const tokens = await getOAuthTokens(storeId);
-  if (!tokens) throw new Error('Store not authenticated');
+async function loadRulesDoc(storeId: string, sessionAccessToken?: string): Promise<StoredRulesDoc> {
+  const tokens = await resolveStoreTokens(storeId, sessionAccessToken);
   const doc = await readStorageJson<StoredRulesDoc>(tokens, storageKeys().rules);
   return doc ?? { rules: [] };
 }
 
-async function saveRulesDoc(storeId: string, doc: StoredRulesDoc): Promise<void> {
-  const tokens = await getOAuthTokens(storeId);
-  if (!tokens) throw new Error('Store not authenticated');
+async function saveRulesDoc(
+  storeId: string,
+  doc: StoredRulesDoc,
+  sessionAccessToken?: string,
+): Promise<void> {
+  const tokens = await resolveStoreTokens(storeId, sessionAccessToken);
   await writeStorageJson(tokens, storageKeys().rules, doc);
 }
 
-export async function listBundleRules(storeId: string): Promise<BundleRule[]> {
-  const doc = await loadRulesDoc(storeId);
+export async function listBundleRules(
+  storeId: string,
+  sessionAccessToken?: string,
+): Promise<BundleRule[]> {
+  const doc = await loadRulesDoc(storeId, sessionAccessToken);
   return doc.rules
     .slice()
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map(mapStoredRule);
 }
 
-export async function getBundleRule(storeId: string, id: string): Promise<BundleRule | null> {
-  const doc = await loadRulesDoc(storeId);
+export async function getBundleRule(
+  storeId: string,
+  id: string,
+  sessionAccessToken?: string,
+): Promise<BundleRule | null> {
+  const doc = await loadRulesDoc(storeId, sessionAccessToken);
   const row = doc.rules.find((r) => r.id === id);
   return row ? mapStoredRule(row) : null;
 }
@@ -54,6 +63,7 @@ export async function listActiveRulesForStore(
 export async function saveBundleRule(
   storeId: string,
   input: Record<string, unknown>,
+  sessionAccessToken?: string,
 ): Promise<BundleRule> {
   const partial = ruleInputFromBody(input, storeId);
   if (!partial.title?.trim()) throw new Error('Enter a title.');
@@ -83,7 +93,7 @@ export async function saveBundleRule(
   };
 
   const now = new Date().toISOString();
-  const doc = await loadRulesDoc(storeId);
+  const doc = await loadRulesDoc(storeId, sessionAccessToken);
 
   const base: Omit<StoredRuleRow, 'id' | 'createdAt' | 'updatedAt'> = {
     title: partial.title.trim(),
@@ -118,7 +128,7 @@ export async function saveBundleRule(
       ...base,
       updatedAt: now,
     };
-    await saveRulesDoc(storeId, doc);
+    await saveRulesDoc(storeId, doc, sessionAccessToken);
     return mapStoredRule(doc.rules[idx]!);
   }
 
@@ -129,7 +139,7 @@ export async function saveBundleRule(
     ...base,
   };
   doc.rules.push(row);
-  await saveRulesDoc(storeId, doc);
+  await saveRulesDoc(storeId, doc, sessionAccessToken);
   return mapStoredRule(row);
 }
 
@@ -137,19 +147,24 @@ export async function setBundleStatus(
   storeId: string,
   id: string,
   status: RuleStatus,
+  sessionAccessToken?: string,
 ): Promise<BundleRule> {
-  const doc = await loadRulesDoc(storeId);
+  const doc = await loadRulesDoc(storeId, sessionAccessToken);
   const idx = doc.rules.findIndex((r) => r.id === id);
   if (idx < 0) throw new Error('Rule not found');
   doc.rules[idx] = { ...doc.rules[idx]!, status, updatedAt: new Date().toISOString() };
-  await saveRulesDoc(storeId, doc);
+  await saveRulesDoc(storeId, doc, sessionAccessToken);
   return mapStoredRule(doc.rules[idx]!);
 }
 
-export async function deleteBundleRule(storeId: string, id: string): Promise<void> {
-  const doc = await loadRulesDoc(storeId);
+export async function deleteBundleRule(
+  storeId: string,
+  id: string,
+  sessionAccessToken?: string,
+): Promise<void> {
+  const doc = await loadRulesDoc(storeId, sessionAccessToken);
   const before = doc.rules.length;
   doc.rules = doc.rules.filter((r) => r.id !== id);
   if (doc.rules.length === before) throw new Error('Rule not found');
-  await saveRulesDoc(storeId, doc);
+  await saveRulesDoc(storeId, doc, sessionAccessToken);
 }
