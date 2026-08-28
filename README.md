@@ -12,7 +12,9 @@ ECWID_CLIENT_SECRET=your_client_secret
 PORT=3001
 ```
 
-Secrets are read from `.env` files only — no server environment variables required. Place `.env` at the repo root or in `server/`.
+Secrets are read from the **committed `.env` file** at the repo root (deployed with the app). During build, it is copied to `server/.env` and bundled into the Vercel serverless function. No platform environment variables are required.
+
+> **Security note:** `.env` is no longer gitignored so it deploys with the repo. Keep the repository private if it contains real credentials.
 
 All other settings live in **`app.manifest.json`**:
 
@@ -62,14 +64,9 @@ This is an npm **monorepo**. Vercel must install and build from the workspace ro
 
 **If Root Directory is `server`:** `server/vercel.json` runs `cd .. && npm install` and `cd .. && npm run build` so workspace packages resolve.
 
-Set these environment variables in the Vercel dashboard (or use `.env` committed only for non-secrets — secrets go in Vercel env UI):
-
-- `ECWID_CLIENT_ID`
-- `ECWID_CLIENT_SECRET`
-- `PORT` (optional; Vercel sets this automatically)
+Ensure root `.env` is **committed to git** before deploying — Vercel clones the repo and the build copies `.env` into the function bundle.
 
 The Express app exports as a serverless function when `VERCEL=1` (automatic on Vercel).
-
 
 ```bash
 npm install

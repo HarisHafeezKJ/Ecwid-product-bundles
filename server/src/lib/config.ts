@@ -63,7 +63,7 @@ export function getRepoRoot(): string {
   return path.resolve(__dirname, '../../..');
 }
 
-/** Load secrets from .env files (does not override Vercel/host env vars). */
+/** Load secrets from committed .env files (primary config source). */
 export function loadEnvFiles(): void {
   if (envLoaded) return;
   const root = getRepoRoot();
@@ -72,10 +72,12 @@ export function loadEnvFiles(): void {
     path.join(root, 'server', '.env'),
     path.join(process.cwd(), '.env'),
     path.join(process.cwd(), 'server', '.env'),
+    path.join(__dirname, '../../.env'),
+    path.join(__dirname, '../../../.env'),
   ];
   for (const file of candidates) {
     if (pathExists(file)) {
-      dotenv.config({ path: file, override: false });
+      dotenv.config({ path: file, override: true });
     }
   }
   envLoaded = true;
@@ -114,7 +116,7 @@ export function getEcwidClientId(): string {
   loadEnvFiles();
   const id = process.env.ECWID_CLIENT_ID?.trim();
   if (!id) {
-    throw new Error('ECWID_CLIENT_ID is missing. Add it to .env or Vercel Environment Variables.');
+    throw new Error('ECWID_CLIENT_ID is missing. Add it to the committed .env file.');
   }
   return id;
 }
@@ -123,7 +125,7 @@ export function getEcwidClientSecret(): string {
   loadEnvFiles();
   const secret = process.env.ECWID_CLIENT_SECRET?.trim();
   if (!secret) {
-    throw new Error('ECWID_CLIENT_SECRET is missing. Add it to .env or Vercel Environment Variables.');
+    throw new Error('ECWID_CLIENT_SECRET is missing. Add it to the committed .env file.');
   }
   return secret;
 }

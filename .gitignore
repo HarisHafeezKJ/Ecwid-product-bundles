@@ -1,7 +1,9 @@
 node_modules/
 dist/
 build/
-.env
+.env.local
+.env.*.local
+server/.env
 *.db
 *.db-journal
 server/data/
