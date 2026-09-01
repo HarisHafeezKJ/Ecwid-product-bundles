@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import type { CartLineSnapshot } from '@pb/shared';
 import { listActiveRulesForStore } from '../../lib/db/rules.js';
+import { listActiveRulesFromPublicConfig } from '../../lib/db/public-rules.js';
 import { syncVolumeCart } from '../../lib/volume-cart-sync.js';
 import { corsHeaders, failResponse, jsonResponse } from '../../lib/api-response.js';
-import { getStoreTokens } from '../../lib/auth.js';
+import { resolveStorefrontTokens } from '../../lib/storefront-tokens.js';
+import { getOAuthTokens } from '../../lib/storage/oauth-cache.js';
 import { requireStoreId } from '../../lib/store-context.js';
 
 function linesFromBody(body: Record<string, unknown> | undefined): CartLineSnapshot[] {
@@ -36,14 +38,31 @@ syncVolumeCartRouter.options('/', (req, res) => {
 syncVolumeCartRouter.post('/', async (req, res) => {
   try {
     const storeId = requireStoreId(req);
-    const tokens = await getStoreTokens(storeId);
-    if (!tokens) return failResponse(res, req, 'Store not found', 404);
+    const publicToken = String(req.body?.publicToken ?? req.query.publicToken ?? '').trim();
+    const cachedPrivate = await getOAuthTokens(storeId);
+    const tokens = await resolveStorefrontTokens(storeId, publicToken || undefined);
+    if (!tokens) {
+      jsonResponse(res, req, { ok: true, updated: 0 });
+      return;
+    }
 
     const lines = linesFromBody(req.body);
-    const rules = await listActiveRulesForStore(storeId);
+    if (lines.length === 0) {
+      jsonResponse(res, req, { ok: true, updated: 0 });
+      return;
+    }
+
+    const usePublicRules = Boolean(publicToken) && !cachedPrivate?.accessToken;
+    const rules = usePublicRules
+      ? await listActiveRulesFromPublicConfig(tokens)
+      : await listActiveRulesForStore(storeId);
     const { updated } = await syncVolumeCart(tokens, rules, lines);
 
-    jsonResponse(res, req, { ok: true, updated, cartId: req.body?.cartId });
+    jsonResponse(res, req, {
+      ok: true,
+      updated: updated.length,
+      cartId: req.body?.cartId,
+    });
   } catch (err) {
     failResponse(res, req, err instanceof Error ? err.message : 'Cart sync failed', 500);
   }

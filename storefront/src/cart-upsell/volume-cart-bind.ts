@@ -1,5 +1,5 @@
 import { syncVolumeCart } from '../api';
-import { cartIdFrom, getCart, refreshCart } from '../ecwid';
+import { cartIdFrom, cartLineSnapshots, getCart, refreshCart } from '../ecwid';
 import { debounce } from '../utils';
 
 let started = false;
@@ -27,8 +27,11 @@ export function startVolumeCartSync(): void {
 async function runVolumeSync(): Promise<void> {
   try {
     const cart = await getCart();
+    const lines = cartLineSnapshots(cart);
+    if (!lines.length) return;
+
     const cartId = cartIdFrom(cart);
-    const result = await syncVolumeCart(cartId);
+    const result = await syncVolumeCart(cartId, lines);
     if (result.updated && result.updated > 0) {
       await refreshCart();
       document.dispatchEvent(new CustomEvent('pb-cart-changed'));

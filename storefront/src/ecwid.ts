@@ -1,4 +1,4 @@
-import type { EcwidApi, EcwidCart, EcwidPage } from './types';
+import type { EcwidApi, EcwidCart, EcwidPage, CartLineSnapshotPayload } from './types';
 import {
   getInstantSite,
   instantSiteProductPage,
@@ -166,6 +166,28 @@ export function cartProductIds(cart: EcwidCart | null): string[] {
 export function cartIdFrom(cart: EcwidCart | null): string | undefined {
   if (!cart) return undefined;
   return cart.cartId ?? cart.id ?? undefined;
+}
+
+export function cartLineSnapshots(cart: EcwidCart | null): CartLineSnapshotPayload[] {
+  if (!cart?.items?.length) return [];
+
+  return cart.items.map((item, index) => {
+    const productId = item.product?.id ?? item.productId;
+    const unitPrice = Number(item.price ?? item.productPrice ?? item.product?.price ?? 0);
+    const catalogPrice = Number(
+      item.productPrice ?? item.catalogPrice ?? item.price ?? item.product?.price ?? unitPrice,
+    );
+    const options = item.options ?? item.selectedOptions;
+
+    return {
+      lineId: item.id != null ? String(item.id) : String(index),
+      productId: productId != null ? String(productId) : '',
+      quantity: Math.max(0, Number(item.quantity ?? 0)),
+      unitPrice,
+      catalogPrice,
+      ...(options && Object.keys(options).length > 0 ? { options } : {}),
+    };
+  }).filter((line) => line.productId && line.quantity > 0);
 }
 
 export async function resolveClientId(): Promise<string | undefined> {

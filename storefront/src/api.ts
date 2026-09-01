@@ -1,6 +1,7 @@
 import type {
   AddDiscountedRequest,
   AddDiscountedResponse,
+  CartLineSnapshotPayload,
   CartUpsellResponse,
   OfferResponse,
   RuleType,
@@ -104,8 +105,14 @@ export async function fetchCartUpsell(productIds: string[]): Promise<CartUpsellR
   return parseJson<CartUpsellResponse>(res);
 }
 
-export async function syncVolumeCart(cartId?: string): Promise<{ ok?: boolean; updated?: number }> {
+export async function syncVolumeCart(
+  cartId?: string,
+  lines?: CartLineSnapshotPayload[],
+): Promise<{ ok?: boolean; updated?: number }> {
+  if (!lines?.length) return { ok: true, updated: 0 };
+
   const storeId = getStoreId();
+  const publicToken = await getPublicToken();
   const res = await fetch(storefrontUrl('/sync-volume-cart'), {
     method: 'POST',
     credentials: 'include',
@@ -113,9 +120,15 @@ export async function syncVolumeCart(cartId?: string): Promise<{ ok?: boolean; u
       Accept: 'application/json',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ cartId, storeId }),
+    body: JSON.stringify({
+      cartId,
+      storeId,
+      lines,
+      publicToken: publicToken ?? undefined,
+    }),
   });
-  return (await parseJson<{ ok?: boolean; updated?: number }>(res)) ?? {};
+  if (!res.ok) return { ok: false, updated: 0 };
+  return (await res.json()) as { ok?: boolean; updated?: number };
 }
 
 export async function addCartUpsellLines(body: {

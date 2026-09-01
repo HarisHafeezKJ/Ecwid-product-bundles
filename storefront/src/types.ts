@@ -160,16 +160,31 @@ export interface CartUpsellResponse {
   offers?: CartUpsellOffer[];
 }
 
+export interface CartLineSnapshotPayload {
+  lineId?: string;
+  productId: string;
+  variantId?: string;
+  quantity: number;
+  unitPrice: number;
+  catalogPrice: number;
+  options?: Record<string, string>;
+}
+
 export interface EcwidPage {
   type?: string;
   productId?: number;
 }
 
 export interface EcwidCartItem {
-  product?: { id?: number };
+  id?: number | string;
+  product?: { id?: number; price?: number };
   productId?: number;
   quantity?: number;
+  price?: number;
+  productPrice?: number;
+  catalogPrice?: number;
   options?: Record<string, string>;
+  selectedOptions?: Record<string, string>;
 }
 
 export interface EcwidCart {
