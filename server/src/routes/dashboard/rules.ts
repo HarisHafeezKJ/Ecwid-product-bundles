@@ -6,6 +6,7 @@ import {
   listBundleRules,
   saveBundleRule,
   setBundleStatus,
+  syncRulesToPublicConfigForStore,
 } from '../../lib/db/rules.js';
 import { CLIENT_ERRORS, failResponse, jsonResponse } from '../../lib/api-response.js';
 import { requireDashboardAuth } from '../../lib/auth.js';
@@ -25,6 +26,9 @@ rulesRouter.get('/', async (req, res) => {
     const storeId = req.session!.storeId!;
     const token = sessionToken(req);
     const rules = await listBundleRules(storeId, token);
+    void syncRulesToPublicConfigForStore(storeId, token).catch((err) => {
+      console.warn('syncRulesToPublicConfig failed', err);
+    });
     jsonResponse(res, req, { rules });
   } catch (err) {
     console.error('GET /api/dashboard/rules failed', err);

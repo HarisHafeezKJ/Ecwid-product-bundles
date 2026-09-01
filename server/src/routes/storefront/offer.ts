@@ -1,12 +1,14 @@
 import { Router } from 'express';
 import { isRuleType } from '@pb/shared';
-import { listActiveRulesForStore } from '../../lib/db/rules.js';
+import { listActiveRulesForStore, syncRulesToPublicConfigForStore } from '../../lib/db/rules.js';
+import { listActiveRulesFromPublicConfig } from '../../lib/db/public-rules.js';
 import { incrementMonthlyViews } from '../../lib/db/settings.js';
 import { buildStorefrontWidgetViews } from '../../lib/build-widget-view.js';
 import { serializeWidgetView } from '../../lib/serialize-widget-view.js';
 import { getStoreProfile } from '../../lib/ecwid.js';
 import { CLIENT_ERRORS, corsHeaders, failResponse, jsonResponse } from '../../lib/api-response.js';
 import { getStoreTokens } from '../../lib/auth.js';
+import { getOAuthTokens } from '../../lib/storage/oauth-cache.js';
 import { requireStoreId } from '../../lib/store-context.js';
 import type { RuleType } from '@pb/shared';
 
@@ -30,18 +32,38 @@ offerRouter.get('/', async (req, res) => {
     if (!productId) return failResponse(res, req, 'productId is required', 400);
     if (ruleTypeRaw && !ruleType) return failResponse(res, req, 'Invalid ruleType', 400);
 
-    const tokens = await getStoreTokens(storeId);
+    const publicToken = String(req.query.publicToken ?? '').trim();
+    const cachedPrivate = await getOAuthTokens(storeId);
+
+    let tokens = cachedPrivate;
+    if (tokens && publicToken && !tokens.publicToken) {
+      tokens = { ...tokens, publicToken };
+    }
+    if (!tokens && publicToken) {
+      tokens = { storeId, accessToken: publicToken, publicToken };
+    }
+    if (!tokens) {
+      tokens = await getStoreTokens(storeId);
+    }
     if (!tokens) {
       console.warn('[pb-offer] No OAuth tokens for store', storeId);
       return res.status(204).set(corsHeaders(req)).end();
     }
 
+    const usePublicRules = Boolean(publicToken) && !cachedPrivate?.accessToken;
+
     let overViewLimit = false;
-    if (!ruleId) {
-      await incrementMonthlyViews(storeId);
+    if (!ruleId && cachedPrivate?.accessToken) {
+      try {
+        await incrementMonthlyViews(storeId);
+      } catch (err) {
+        console.warn('[pb-offer] incrementMonthlyViews failed', err);
+      }
     }
 
-    let rules = await listActiveRulesForStore(storeId, ruleType);
+    let rules = usePublicRules
+      ? await listActiveRulesFromPublicConfig(tokens)
+      : await listActiveRulesForStore(storeId, ruleType);
     if (ruleType) {
       rules = rules.filter((r) => r.ruleType === ruleType);
     }

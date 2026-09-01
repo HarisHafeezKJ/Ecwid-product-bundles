@@ -8,7 +8,13 @@ import {
   defaultWidgetStyle,
 } from '@pb/shared';
 import { resolveStoreTokens } from '../storage/oauth-cache.js';
-import { readStorageJson, storageKeys, writeStorageJson } from '../storage/ecwid-storage.js';
+import {
+  readPublicConfig,
+  readStorageJson,
+  storageKeys,
+  writePublicConfig,
+  writeStorageJson,
+} from '../storage/ecwid-storage.js';
 import { mapStoredRule, ruleInputFromBody, type StoredRuleRow, type StoredRulesDoc } from './mappers.js';
 
 const EMPTY_IDS: string[] = [];
@@ -32,6 +38,27 @@ async function loadRulesDoc(storeId: string, sessionAccessToken?: string): Promi
   return normalizeRulesDoc(doc);
 }
 
+async function syncRulesToPublicConfig(
+  storeId: string,
+  sessionAccessToken?: string,
+): Promise<void> {
+  const tokens = await resolveStoreTokens(storeId, sessionAccessToken);
+  const doc = await loadRulesDoc(storeId, sessionAccessToken);
+  const existing = (await readPublicConfig(tokens)) ?? {};
+  await writePublicConfig(tokens, {
+    ...existing,
+    rules: doc.rules.filter((row) => row.status === 'ACTIVE'),
+    rulesUpdatedAt: new Date().toISOString(),
+  });
+}
+
+export async function syncRulesToPublicConfigForStore(
+  storeId: string,
+  sessionAccessToken?: string,
+): Promise<void> {
+  await syncRulesToPublicConfig(storeId, sessionAccessToken);
+}
+
 async function saveRulesDoc(
   storeId: string,
   doc: StoredRulesDoc,
@@ -39,6 +66,7 @@ async function saveRulesDoc(
 ): Promise<void> {
   const tokens = await resolveStoreTokens(storeId, sessionAccessToken);
   await writeStorageJson(tokens, storageKeys().rules, doc);
+  await syncRulesToPublicConfig(storeId, sessionAccessToken);
 }
 
 export async function listBundleRules(

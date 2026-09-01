@@ -106,6 +106,7 @@ authRouter.get('/manifest', (req, res) => {
   const baseUrl = getRequestBaseUrl(req);
   jsonResponse(res, req, {
     ...manifest,
+    clientId: getEcwidClientId(),
     urls: {
       baseUrl,
       admin: `${baseUrl}${manifest.paths.adminMount}`,

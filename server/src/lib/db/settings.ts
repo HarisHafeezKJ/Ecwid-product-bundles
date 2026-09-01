@@ -6,6 +6,7 @@ import {
 } from '@pb/shared';
 import { resolveStoreTokens } from '../storage/oauth-cache.js';
 import {
+  readPublicConfig,
   readStorageJson,
   storageKeys,
   writePublicConfig,
@@ -77,7 +78,9 @@ async function saveDoc(
 ): Promise<void> {
   const tokens = await resolveStoreTokens(storeId, sessionAccessToken);
   await writeStorageJson(tokens, storageKeys().settings, doc);
+  const existing = (await readPublicConfig(tokens)) ?? {};
   await writePublicConfig(tokens, {
+    ...existing,
     cartUpsellEnabled: doc.cartUpsellEnabled,
   });
 }

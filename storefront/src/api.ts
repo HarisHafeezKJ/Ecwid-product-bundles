@@ -5,7 +5,7 @@ import type {
   OfferResponse,
   RuleType,
 } from './types';
-import { getStoreId } from './ecwid';
+import { getPublicToken, getStoreId } from './ecwid';
 
 let apiBaseUrl = '';
 
@@ -65,10 +65,12 @@ export async function fetchOffer(params: {
   ruleType?: RuleType;
   ruleId?: string;
 }): Promise<OfferResponse | null> {
+  const publicToken = await getPublicToken();
   const url = storefrontUrl('/offer', {
     productId: params.productId,
     ruleType: params.ruleType,
     ruleId: params.ruleId,
+    publicToken: publicToken ?? undefined,
   });
   const res = await fetch(url, {
     method: 'GET',

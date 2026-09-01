@@ -172,6 +172,8 @@ export interface EcwidApi {
   getOwnerId?: () => number;
   getProductId?: () => number;
   getPageType?: () => string;
+  getAppPublicToken?: (clientId: string) => string | Promise<string>;
+  getAppPublicConfig?: (clientId: string) => unknown;
   OnAPILoaded?: EcwidEventHub;
   OnPageLoad?: EcwidEventHub;
   OnPageLoaded?: EcwidEventHub<{ (page: EcwidPage): void }>;

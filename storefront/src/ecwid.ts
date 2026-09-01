@@ -1,5 +1,21 @@
 import type { EcwidApi, EcwidCart, EcwidPage } from './types';
 
+let cachedClientId: string | undefined;
+
+function storefrontConfigUrl(): string {
+  const script =
+    document.currentScript ??
+    [...document.querySelectorAll('script[src*="pb-bundles"]')].pop();
+  if (script instanceof HTMLScriptElement && script.src) {
+    try {
+      return `${new URL(script.src).origin}/api/storefront/config`;
+    } catch {
+      /* fall through */
+    }
+  }
+  return `${window.location.origin}/api/storefront/config`;
+}
+
 export function getEcwid(): EcwidApi | undefined {
   return window.Ecwid;
 }
@@ -109,4 +125,34 @@ export function cartProductIds(cart: EcwidCart | null): string[] {
 export function cartIdFrom(cart: EcwidCart | null): string | undefined {
   if (!cart) return undefined;
   return cart.cartId ?? cart.id ?? undefined;
+}
+
+export async function resolveClientId(): Promise<string | undefined> {
+  if (cachedClientId) return cachedClientId;
+  try {
+    const res = await fetch(storefrontConfigUrl(), { credentials: 'include' });
+    if (!res.ok) return undefined;
+    const data = (await res.json()) as { clientId?: string };
+    cachedClientId = data.clientId?.trim() || undefined;
+    return cachedClientId;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function getPublicToken(): Promise<string | undefined> {
+  const ecwid = getEcwid();
+  const clientId = await resolveClientId();
+  if (!ecwid?.getAppPublicToken || !clientId) return undefined;
+  try {
+    const token = ecwid.getAppPublicToken(clientId);
+    if (typeof token === 'string' && token.trim()) return token.trim();
+    if (token && typeof (token as Promise<string>).then === 'function') {
+      const resolved = await token;
+      return resolved?.trim() || undefined;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
 }
