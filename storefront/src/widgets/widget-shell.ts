@@ -3,10 +3,12 @@ import { addDiscounted } from '../api';
 import { cartIdFrom, getCart, refreshCart } from '../ecwid';
 import { getEcwid } from '../ecwid';
 import type { EcwidCartLinePayload, EcwidAddProductPayload, PricedLineResponse } from '../types';
-import { qs } from '../utils';
-import { applyWidgetStyle } from './widget-style-css';
+import { qs, withTimeout } from '../utils';
+import { applyWidgetStyle, mirrorNativeAtcTheme } from './widget-style-css';
 
 const PB_STAMP_KEYS = new Set(['pbOfferId', 'pbDealId', 'pbKind']);
+const ECWID_ADD_TIMEOUT_MS = 8000;
+const ECWID_ADD_GAP_MS = 250;
 
 export interface WidgetShellState {
   view: StorefrontWidgetView;
@@ -57,6 +59,7 @@ export function mountWidgetShell(
   container.innerHTML = html;
   const root = qs<HTMLElement>(container, '.pb-widget') ?? container;
   applyWidgetStyle(root, view.widgetStyle);
+  mirrorNativeAtcTheme(root);
   return root;
 }
 
@@ -67,6 +70,11 @@ export async function addDiscountedAndRefresh(
   const cart = await getCart();
   const cartId = cartIdFrom(cart);
   const result = await addDiscounted({ ruleId, lines, cartId });
+
+  if (result.serverAdded) {
+    await refreshCart();
+    return;
+  }
 
   const ecwidLines =
     result.ecwidLines?.length
@@ -118,7 +126,7 @@ async function addEcwidLines(lines: EcwidCartLinePayload[]): Promise<void> {
   for (const line of lines) {
     const added = await addEcwidLineWithFallbacks(cartApi, line);
     if (added) addedCount += 1;
-    await new Promise((resolve) => window.setTimeout(resolve, 120));
+    await new Promise((resolve) => window.setTimeout(resolve, ECWID_ADD_GAP_MS));
   }
 
   if (addedCount === 0) {
@@ -149,19 +157,41 @@ async function addEcwidLineWithFallbacks(
   return false;
 }
 
+function productQtyInCart(cart: Awaited<ReturnType<typeof getCart>>, productId: number): number {
+  if (!cart?.items?.length) return 0;
+  return cart.items.reduce((sum, item) => {
+    const id = item.product?.id ?? item.productId;
+    if (Number(id) !== productId) return sum;
+    return sum + Math.max(0, Number(item.quantity ?? 0));
+  }, 0);
+}
+
 async function tryAddEcwidLine(
   cartApi: NonNullable<NonNullable<ReturnType<typeof getEcwid>>['Cart']>,
   line: EcwidCartLinePayload,
 ): Promise<boolean> {
   const payload = toEcwidAddPayload(line);
-  return new Promise((resolve) => {
-    cartApi.addProduct!(payload, (success, _product, _cart, error) => {
-      if (!success) {
-        console.warn('[pb-bundles] Ecwid addProduct failed', payload, error);
-      }
-      resolve(success);
-    });
-  });
+  const qtyBefore = productQtyInCart(await getCart(), payload.id);
+
+  void withTimeout(
+    new Promise<void>((resolve) => {
+      cartApi.addProduct!(payload, (success, _product, _cart, error) => {
+        if (!success) {
+          console.warn('[pb-bundles] Ecwid addProduct failed', payload, error);
+        }
+        resolve();
+      });
+    }),
+    ECWID_ADD_TIMEOUT_MS,
+    undefined,
+  );
+
+  // Instant Site often applies the add but never invokes the callback on chained calls.
+  await new Promise((resolve) => window.setTimeout(resolve, 500));
+  await refreshCart();
+
+  const qtyAfter = productQtyInCart(await getCart(), payload.id);
+  return qtyAfter >= qtyBefore + payload.quantity;
 }
 
 export function showWidgetError(root: HTMLElement, message: string): void {

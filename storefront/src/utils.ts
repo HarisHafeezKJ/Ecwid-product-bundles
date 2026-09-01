@@ -56,3 +56,11 @@ export function qs<T extends Element>(root: ParentNode, selector: string): T | n
 export function qsa<T extends Element>(root: ParentNode, selector: string): T[] {
   return [...root.querySelectorAll(selector)] as T[];
 }
+
+/** Prevents Ecwid cart callbacks from hanging the storefront indefinitely. */
+export function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => window.setTimeout(() => resolve(fallback), ms)),
+  ]);
+}

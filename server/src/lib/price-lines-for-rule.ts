@@ -12,7 +12,7 @@ import {
   bestVolumeTier,
 } from '@pb/shared';
 import type { EcwidStoreTokens } from './ecwid.js';
-import { getProduct } from './ecwid.js';
+import { getProduct, defaultProductOptions } from './ecwid.js';
 
 export interface PriceLineInput {
   productId: string;
@@ -33,12 +33,28 @@ async function unitPriceForProduct(
   if (!product || !product.inStock) throw new Error('Product is not available');
 
   if (variantId && product.variants?.length) {
-    const variant = product.variants.find((v) => v.id === variantId);
+    const variant =
+      product.variants.find((v) => v.id === variantId) ??
+      product.variants.find((v) =>
+        Object.entries(v.options).some(([name, value]) => variantId === value || variantId === `${name}:${value}`),
+      );
     if (!variant || !variant.inStock) throw new Error('Product is not available');
     return {
       product,
       unitPrice: variant.price,
       variantOptions: variant.options,
+    };
+  }
+
+  const defaultOptions = defaultProductOptions(product);
+  if (defaultOptions) {
+    const variant = product.variants?.find((v) =>
+      Object.entries(defaultOptions).every(([name, value]) => v.options[name] === value),
+    );
+    return {
+      product,
+      unitPrice: variant?.price ?? product.price,
+      variantOptions: defaultOptions,
     };
   }
 

@@ -111,6 +111,8 @@ export interface AddDiscountedResponse {
   cartId?: string;
   lines?: PricedLineResponse[];
   ecwidLines?: EcwidCartLinePayload[];
+  /** True when all lines were added via Ecwid REST cart API (client JS add can be skipped). */
+  serverAdded?: boolean;
 }
 
 export interface PricedLineResponse {

@@ -64,15 +64,16 @@
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  width: 100%;
+  width: calc(var(--pb-cta-width, 100) * 1%);
+  max-width: 100%;
   margin-top: 1rem;
-  border: 0;
-  border-radius: 10px;
-  padding: 0.75rem 1rem;
-  background: var(--pb-add-to-cart-bg, #111827);
-  color: var(--pb-add-to-cart-color, #fff);
-  font-size: var(--pb-add-to-cart-size, 15px);
-  font-weight: 600;
+  border: var(--pb-cta-border, 0);
+  border-radius: var(--pb-cta-radius, 8px);
+  padding: var(--pb-cta-padding, 0.75rem 1rem);
+  background: var(--pb-cta-bg, #111827);
+  color: var(--pb-cta-color, #fff);
+  font-size: var(--pb-cta-size, 16px);
+  font-weight: var(--pb-cta-font-weight, 600);
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
@@ -82,13 +83,30 @@
   font-family: inherit;
   visibility: visible !important;
   opacity: 1 !important;
-  min-height: 44px;
+  min-height: var(--pb-cta-min-height, 44px);
+  height: auto !important;
+  box-shadow: none;
+  text-decoration: none;
 }
 
 .pb-product-bundles .pb-btn,
 #pb-product-bundles .pb-btn {
-  background: var(--pb-add-to-cart-bg, #111827) !important;
-  color: var(--pb-add-to-cart-color, #fff) !important;
+  background: var(--pb-cta-bg, #111827) !important;
+  color: var(--pb-cta-color, #fff) !important;
+  padding: var(--pb-cta-padding, 0.75rem 1rem) !important;
+  min-height: var(--pb-cta-min-height, 44px) !important;
+}
+
+.pb-widget--native-atc .pb-btn {
+  width: 100%;
+}
+
+.pb-btn:hover:not(:disabled) {
+  background: var(--pb-cta-active-bg, var(--pb-cta-bg, #111827));
+}
+
+.pb-btn--success {
+  background: var(--pb-cta-success-bg, #16a34a) !important;
 }
 
 .pb-btn:disabled {

@@ -9,6 +9,9 @@ import {
   storeIdFromHostname,
 } from './instant-site';
 import { appRootFromScript, clientIdFromScript, clientIdSync, findOwnScript } from './script-config';
+import { withTimeout } from './utils';
+
+const CART_CALLBACK_TIMEOUT_MS = 8000;
 
 let cachedClientId: string | undefined;
 
@@ -124,25 +127,33 @@ export function productPageLooksLikely(page?: EcwidPage): boolean {
 }
 
 export function getCart(): Promise<EcwidCart | null> {
-  return new Promise((resolve) => {
-    const cartApi = getEcwid()?.Cart;
-    if (!cartApi?.get) {
-      resolve(null);
-      return;
-    }
-    cartApi.get((cart) => resolve(cart ?? null));
-  });
+  return withTimeout(
+    new Promise((resolve) => {
+      const cartApi = getEcwid()?.Cart;
+      if (!cartApi?.get) {
+        resolve(null);
+        return;
+      }
+      cartApi.get((cart) => resolve(cart ?? null));
+    }),
+    CART_CALLBACK_TIMEOUT_MS,
+    null,
+  );
 }
 
 export function refreshCart(): Promise<void> {
-  return new Promise((resolve) => {
-    const cartApi = getEcwid()?.Cart;
-    if (cartApi?.calculateTotal) {
-      cartApi.calculateTotal(() => resolve());
-      return;
-    }
-    resolve();
-  });
+  return withTimeout(
+    new Promise((resolve) => {
+      const cartApi = getEcwid()?.Cart;
+      if (cartApi?.calculateTotal) {
+        cartApi.calculateTotal(() => resolve());
+        return;
+      }
+      resolve();
+    }),
+    CART_CALLBACK_TIMEOUT_MS,
+    undefined,
+  );
 }
 
 export function goToCheckout(): void {

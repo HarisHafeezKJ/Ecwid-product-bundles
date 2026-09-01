@@ -27,18 +27,33 @@ function expandLinesForRule(rule: BundleRule, clientLines: PriceLineInput[]): Pr
   const components = parseBundleItems(rule.items).components;
   if (components.length < 2) return clientLines;
 
-  return components.map((component) => {
-    const hit = clientLines.find((line) => line.productId === component.productId);
-    return {
-      productId: component.productId,
-      quantity: hit?.quantity ?? Math.max(1, component.minQuantity ?? 1),
-      variantId:
-        hit?.variantId ??
-        (component.adminLocksVariant && component.defaultVariantId
-          ? component.defaultVariantId
-          : undefined),
-    };
-  });
+  const expanded: PriceLineInput[] = [];
+  for (const component of components) {
+    const hits = clientLines.filter((line) => line.productId === component.productId);
+    if (hits.length === 0) {
+      expanded.push({
+        productId: component.productId,
+        quantity: Math.max(1, component.minQuantity ?? 1),
+        variantId:
+          component.adminLocksVariant && component.defaultVariantId
+            ? component.defaultVariantId
+            : undefined,
+      });
+      continue;
+    }
+    for (const hit of hits) {
+      expanded.push({
+        productId: component.productId,
+        quantity: Math.max(1, hit.quantity),
+        variantId:
+          hit.variantId ??
+          (component.adminLocksVariant && component.defaultVariantId
+            ? component.defaultVariantId
+            : undefined),
+      });
+    }
+  }
+  return expanded;
 }
 
 export const addDiscountedRouter = Router();
@@ -93,6 +108,7 @@ addDiscountedRouter.post('/', async (req, res) => {
       cartId: result.cartId,
       lines: priced,
       ecwidLines,
+      serverAdded: result.addedCount >= priced.length,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Could not add to cart';

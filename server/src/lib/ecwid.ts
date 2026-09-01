@@ -84,6 +84,48 @@ function productImageUrl(raw: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
+function storefrontApiToken(tokens: EcwidStoreTokens): string {
+  return tokens.publicToken ?? tokens.accessToken;
+}
+
+function synthesizeVariantsFromOptions(
+  price: number,
+  inStock: boolean,
+  catalogOptions: CatalogProduct['options'],
+): CatalogVariant[] {
+  const selectable = (catalogOptions ?? []).filter((o) => o.choices.length > 0);
+  if (selectable.length === 0) return [];
+
+  if (selectable.length === 1) {
+    const opt = selectable[0];
+    return opt.choices.map((choice) => ({
+      id: choice,
+      price,
+      inStock,
+      options: { [opt.name]: choice },
+    }));
+  }
+
+  const variants: CatalogVariant[] = [];
+  const build = (index: number, current: Record<string, string>) => {
+    if (index >= selectable.length) {
+      variants.push({
+        id: Object.values(current).join(' / '),
+        price,
+        inStock,
+        options: { ...current },
+      });
+      return;
+    }
+    const opt = selectable[index];
+    for (const choice of opt.choices) {
+      build(index + 1, { ...current, [opt.name]: choice });
+    }
+  };
+  build(0, {});
+  return variants;
+}
+
 function mapEcwidProduct(raw: Record<string, unknown>): CatalogProduct {
   const id = String(raw.id ?? '');
   const combinations = Array.isArray(raw.combinations) ? raw.combinations : [];
@@ -120,6 +162,9 @@ function mapEcwidProduct(raw: Record<string, unknown>): CatalogProduct {
       })
     : [];
 
+  const resolvedVariants =
+    variants.length > 0 ? variants : synthesizeVariantsFromOptions(Number(raw.price ?? 0), raw.inStock !== false, options);
+
   return {
     id,
     name: String(raw.name ?? ''),
@@ -129,9 +174,24 @@ function mapEcwidProduct(raw: Record<string, unknown>): CatalogProduct {
     imageUrl: productImageUrl(raw),
     inStock: raw.inStock !== false && Number(raw.quantity ?? 1) !== 0,
     quantity: Number(raw.quantity ?? 0) || undefined,
-    variants: variants.length > 0 ? variants : undefined,
+    variants: resolvedVariants.length > 0 ? resolvedVariants : undefined,
     options: options.length > 0 ? options : undefined,
   };
+}
+
+export function defaultProductOptions(product: CatalogProduct): Record<string, string> | undefined {
+  if (product.variants?.length) {
+    const variant = product.variants.find((v) => v.inStock) ?? product.variants[0];
+    return variant.options;
+  }
+  if (product.options?.length) {
+    const map: Record<string, string> = {};
+    for (const opt of product.options) {
+      if (opt.choices[0]) map[opt.name] = opt.choices[0];
+    }
+    return Object.keys(map).length > 0 ? map : undefined;
+  }
+  return undefined;
 }
 
 export async function getProduct(
@@ -141,7 +201,7 @@ export async function getProduct(
   try {
     const raw = await ecwidFetch<Record<string, unknown>>(
       tokens.storeId,
-      tokens.accessToken,
+      storefrontApiToken(tokens),
       `/products/${productId}`,
     );
     return mapEcwidProduct(raw);
@@ -171,7 +231,7 @@ export async function searchProducts(
   });
   const data = await ecwidFetch<{ items?: Record<string, unknown>[] }>(
     tokens.storeId,
-    tokens.accessToken,
+    storefrontApiToken(tokens),
     `/products?${params.toString()}`,
   );
   return (data.items ?? []).map(mapEcwidProduct);
@@ -218,7 +278,7 @@ export async function addToCart(
   tokens: EcwidStoreTokens,
   cartId: string | undefined,
   lines: EcwidAddCartLineInput[],
-): Promise<{ cartId?: string; lines: EcwidAddCartLineInput[] }> {
+): Promise<{ cartId?: string; lines: EcwidAddCartLineInput[]; addedCount: number }> {
   const pricedLines = lines.map((line) => ({
     ...line,
     options: {
@@ -227,31 +287,46 @@ export async function addToCart(
   }));
 
   if (!cartId) {
-    return { cartId: undefined, lines: pricedLines };
+    return { cartId: undefined, lines: pricedLines, addedCount: 0 };
   }
 
-  try {
-    for (const line of pricedLines) {
-      await ecwidFetch(
-        tokens.storeId,
-        tokens.publicToken ?? tokens.accessToken,
-        `/carts/${cartId}/items`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            productId: Number(line.productId),
-            quantity: line.quantity,
-            selectedOptions: line.options,
-            ...(line.unitPrice != null ? { selectedPrice: line.unitPrice } : {}),
-            ...(line.variantId ? { combinationId: Number(line.variantId) } : {}),
-          }),
-        },
-      );
+  let addedCount = 0;
+  for (const line of pricedLines) {
+    const baseBody = {
+      productId: Number(line.productId),
+      quantity: line.quantity,
+      ...(line.variantId ? { combinationId: Number(line.variantId) } : {}),
+    };
+    const attempts = [
+      { ...baseBody, selectedOptions: line.options },
+      {
+        ...baseBody,
+        selectedOptions: line.options,
+        ...(line.unitPrice != null ? { selectedPrice: line.unitPrice } : {}),
+      },
+      baseBody,
+    ];
+
+    for (const body of attempts) {
+      try {
+        await ecwidFetch(
+          tokens.storeId,
+          storefrontApiToken(tokens),
+          `/carts/${cartId}/items`,
+          {
+            method: 'POST',
+            body: JSON.stringify(body),
+          },
+        );
+        addedCount += 1;
+        break;
+      } catch {
+        /* try next payload shape */
+      }
     }
-    return { cartId, lines: pricedLines };
-  } catch {
-    return { cartId, lines: pricedLines };
   }
+
+  return { cartId, lines: pricedLines, addedCount };
 }
 
 export async function updateCartLine(
