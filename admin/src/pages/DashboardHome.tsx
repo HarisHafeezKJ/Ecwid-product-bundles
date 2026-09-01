@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { RuleType } from '@pb/shared';
+import type { BundleRule, RuleType } from '@pb/shared';
 import { draftFromRule } from '../components/editor/editor-draft';
 import type { OfferDraft } from '../components/editor/editor-draft';
 import CreateOfferModal from '../components/CreateOfferModal';
@@ -16,12 +16,20 @@ type StatusFilter = 'ALL' | 'ACTIVE' | 'DISABLED';
 
 interface DashboardHomeProps {
   listEpoch: number;
+  savedRuleHint: BundleRule | null;
+  onClearSavedRuleHint: () => void;
   onCreate: (ruleType: RuleType) => void;
   onEdit: (draft: OfferDraft) => void;
 }
 
-export default function DashboardHome({ listEpoch, onCreate, onEdit }: DashboardHomeProps) {
-  const { rules, settings, loading, mutating, error, refresh, removeRule, updateStatus } =
+export default function DashboardHome({
+  listEpoch,
+  savedRuleHint,
+  onClearSavedRuleHint,
+  onCreate,
+  onEdit,
+}: DashboardHomeProps) {
+  const { rules, settings, loading, mutating, error, refresh, removeRule, updateStatus, setRules } =
     useRules();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
@@ -32,6 +40,19 @@ export default function DashboardHome({ listEpoch, onCreate, onEdit }: Dashboard
   useEffect(() => {
     void refresh();
   }, [listEpoch, refresh]);
+
+  useEffect(() => {
+    if (!savedRuleHint) return;
+    setRules((prev) => {
+      const idx = prev.findIndex((rule) => rule.id === savedRuleHint.id);
+      if (idx >= 0) {
+        return prev.map((rule) => (rule.id === savedRuleHint.id ? savedRuleHint : rule));
+      }
+      return [savedRuleHint, ...prev];
+    });
+    onClearSavedRuleHint();
+    void refresh();
+  }, [savedRuleHint, onClearSavedRuleHint, refresh, setRules]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();

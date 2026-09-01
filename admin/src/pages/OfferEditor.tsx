@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { validateRuleForm } from '@pb/shared';
+import { validateRuleForm, type BundleRule } from '@pb/shared';
 import * as api from '../api/client';
 import EditorSetup from '../components/editor/EditorSetup';
 import EditorStyle from '../components/editor/EditorStyle';
@@ -11,7 +11,7 @@ import type { OfferDraft } from '../components/editor/editor-draft';
 interface OfferEditorProps {
   mode: 'create' | 'edit';
   initialDraft: OfferDraft;
-  onClose: (saved: boolean) => void;
+  onClose: (saved: boolean, rule?: BundleRule) => void;
 }
 
 export default function OfferEditor({ mode, initialDraft, onClose }: OfferEditorProps) {
@@ -56,9 +56,9 @@ export default function OfferEditor({ mode, initialDraft, onClose }: OfferEditor
     setSaving(true);
     setError(null);
     try {
-      await api.saveRule(draftToRuleInput(draft));
+      const rule = await api.saveRule(draftToRuleInput(draft));
       setToast('Saved successfully.');
-      setTimeout(() => onClose(true), 600);
+      setTimeout(() => onClose(true, rule), 600);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the rule.');
     } finally {

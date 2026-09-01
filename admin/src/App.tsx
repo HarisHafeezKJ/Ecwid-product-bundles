@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { RuleType } from '@pb/shared';
+import type { BundleRule, RuleType } from '@pb/shared';
 import { checkDashboardSession, consumeServerAuthError } from './api/session';
 import DashboardHome from './pages/DashboardHome';
 import OfferEditor from './pages/OfferEditor';
@@ -15,6 +15,7 @@ function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [view, setView] = useState<View>({ name: 'home' });
   const [listEpoch, setListEpoch] = useState(0);
+  const [savedRuleHint, setSavedRuleHint] = useState<BundleRule | null>(null);
 
   useEffect(() => {
     void checkDashboardSession().then((authenticated) => {
@@ -43,9 +44,12 @@ function App() {
     setView({ name: 'editor', mode: 'edit', draft });
   }, []);
 
-  const closeEditor = useCallback((saved: boolean) => {
+  const closeEditor = useCallback((saved: boolean, rule?: BundleRule) => {
     setView({ name: 'home' });
-    if (saved) setListEpoch((n) => n + 1);
+    if (saved) {
+      if (rule) setSavedRuleHint(rule);
+      else setListEpoch((n) => n + 1);
+    }
   }, []);
 
   if (!authReady) {
@@ -80,6 +84,8 @@ function App() {
         <div style={{ display: view.name === 'home' ? 'block' : 'none' }}>
           <DashboardHome
             listEpoch={listEpoch}
+            savedRuleHint={savedRuleHint}
+            onClearSavedRuleHint={() => setSavedRuleHint(null)}
             onCreate={openCreate}
             onEdit={openEdit}
           />

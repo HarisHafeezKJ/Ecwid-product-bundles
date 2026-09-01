@@ -24,6 +24,71 @@ async function storageRequest(
   });
 }
 
+/** Decode Ecwid storage payloads (string JSON, nested strings, or { value } envelopes). */
+function decodeStorageJson<T>(raw: unknown): T | null {
+  if (raw == null) return null;
+
+  let current: unknown = raw;
+  for (let depth = 0; depth < 4; depth++) {
+    if (typeof current === 'string') {
+      const trimmed = current.trim();
+      if (!trimmed) return null;
+      try {
+        current = JSON.parse(trimmed);
+        continue;
+      } catch {
+        return null;
+      }
+    }
+
+    if (current && typeof current === 'object' && !Array.isArray(current)) {
+      const envelope = current as Record<string, unknown>;
+      if (envelope.value != null) {
+        const keys = Object.keys(envelope);
+        const isApiEnvelope =
+          keys.length === 1 ||
+          (keys.length === 2 && keys.includes('key') && keys.includes('value'));
+        if (isApiEnvelope) {
+          current = envelope.value;
+          continue;
+        }
+      }
+    }
+
+    break;
+  }
+
+  if (current && typeof current === 'object') return current as T;
+  return null;
+}
+
+function extractStorageValue(
+  data: unknown,
+  key: string,
+): unknown {
+  if (Array.isArray(data)) {
+    const row =
+      data.find(
+        (entry) =>
+          entry &&
+          typeof entry === 'object' &&
+          (entry as { key?: string }).key === key,
+      ) ?? data[0];
+    if (row && typeof row === 'object' && 'value' in row) {
+      return (row as { value: unknown }).value;
+    }
+    return undefined;
+  }
+
+  if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>;
+    if ('value' in obj) return obj.value;
+    return data;
+  }
+
+  return undefined;
+}
+
 /** Read a private storage key. Returns null when missing. */
 export async function readStorageJson<T>(
   tokens: EcwidStoreTokens,
@@ -36,21 +101,9 @@ export async function readStorageJson<T>(
     throw new Error(`Ecwid storage GET ${key} failed: ${text || res.statusText}`);
   }
 
-  const data = (await res.json()) as Array<{ key: string; value: string }> | { value?: string };
-  let raw: string | undefined;
-
-  if (Array.isArray(data)) {
-    raw = data.find((row) => row.key === key)?.value ?? data[0]?.value;
-  } else if (data && typeof data === 'object' && 'value' in data) {
-    raw = data.value;
-  }
-
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
+  const data = (await res.json()) as unknown;
+  const raw = extractStorageValue(data, key);
+  return decodeStorageJson<T>(raw);
 }
 
 /** Write a private storage key (PUT replaces value). */

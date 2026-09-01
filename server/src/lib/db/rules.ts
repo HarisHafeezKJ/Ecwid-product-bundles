@@ -17,8 +17,11 @@ function normalizeRulesDoc(raw: unknown): StoredRulesDoc {
   if (!raw) return { rules: [] };
   // Legacy / corrupted storage may be a bare array of rules instead of { rules: [] }.
   if (Array.isArray(raw)) return { rules: raw as StoredRuleRow[] };
-  if (typeof raw === 'object' && Array.isArray((raw as StoredRulesDoc).rules)) {
-    return raw as StoredRulesDoc;
+  if (typeof raw === 'object') {
+    const doc = raw as StoredRulesDoc;
+    if (Array.isArray(doc.rules)) return doc;
+    const wrapped = (raw as { value?: unknown }).value;
+    if (wrapped != null) return normalizeRulesDoc(wrapped);
   }
   return { rules: [] };
 }
@@ -45,7 +48,7 @@ export async function listBundleRules(
   const doc = await loadRulesDoc(storeId, sessionAccessToken);
   return doc.rules
     .slice()
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
     .map(mapStoredRule);
 }
 
@@ -66,7 +69,7 @@ export async function listActiveRulesForStore(
   const doc = await loadRulesDoc(storeId);
   return doc.rules
     .filter((r) => r.status === 'ACTIVE' && (!ruleType || r.ruleType === ruleType))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
     .map(mapStoredRule);
 }
 
