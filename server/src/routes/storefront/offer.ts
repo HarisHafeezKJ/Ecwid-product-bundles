@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { isRuleType } from '@pb/shared';
 import { listActiveRulesForStore } from '../../lib/db/rules.js';
-import { listActiveRulesFromPublicConfig } from '../../lib/db/public-rules.js';
+import {
+  listActiveRulesFromEmbeddedPublicConfig,
+  listActiveRulesFromPublicConfig,
+} from '../../lib/db/public-rules.js';
 import { incrementMonthlyViews } from '../../lib/db/settings.js';
 import { buildStorefrontWidgetViews } from '../../lib/build-widget-view.js';
 import { serializeWidgetView } from '../../lib/serialize-widget-view.js';
@@ -18,26 +21,32 @@ offerRouter.options('/', (req, res) => {
   res.status(204).set(corsHeaders(req)).end();
 });
 
-offerRouter.get('/', async (req, res) => {
+async function handleOffer(
+  req: import('express').Request,
+  res: import('express').Response,
+): Promise<void> {
   try {
     const storeId = requireStoreId(req);
-    const productId = String(req.query.productId ?? '').trim();
-    const ruleId = String(req.query.ruleId ?? '').trim() || undefined;
-    const ruleTypeRaw = req.query.ruleType;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const productId = String(req.query.productId ?? body.productId ?? '').trim();
+    const ruleId = String(req.query.ruleId ?? body.ruleId ?? '').trim() || undefined;
+    const ruleTypeRaw = req.query.ruleType ?? body.ruleType;
     const ruleType =
       typeof ruleTypeRaw === 'string' && isRuleType(ruleTypeRaw)
         ? (ruleTypeRaw as RuleType)
         : undefined;
+    const embeddedPublicConfig = body.publicConfig;
 
     if (!productId) return failResponse(res, req, 'productId is required', 400);
     if (ruleTypeRaw && !ruleType) return failResponse(res, req, 'Invalid ruleType', 400);
 
-    const publicToken = String(req.query.publicToken ?? '').trim();
+    const publicToken = String(req.query.publicToken ?? body.publicToken ?? '').trim();
     const cachedPrivate = await getOAuthTokens(storeId);
     const tokens = await resolveStorefrontTokens(storeId, publicToken || undefined);
     if (!tokens) {
       console.warn('[pb-offer] No OAuth tokens for store', storeId);
-      return res.status(204).set(corsHeaders(req)).end();
+      res.status(204).set(corsHeaders(req)).end();
+      return;
     }
 
     let overViewLimit = false;
@@ -58,8 +67,16 @@ offerRouter.get('/', async (req, res) => {
       }
     }
     if (rules.length === 0) {
-      rules = await listActiveRulesFromPublicConfig(tokens);
+      try {
+        rules = await listActiveRulesFromPublicConfig(tokens);
+      } catch (err) {
+        console.warn('[pb-offer] listActiveRulesFromPublicConfig failed', err);
+      }
     }
+    if (rules.length === 0 && embeddedPublicConfig) {
+      rules = listActiveRulesFromEmbeddedPublicConfig(embeddedPublicConfig);
+    }
+
     if (ruleType) {
       rules = rules.filter((r) => r.ruleType === ruleType);
     }
@@ -70,7 +87,15 @@ offerRouter.get('/', async (req, res) => {
     }
 
     const views = await buildStorefrontWidgetViews(tokens, rules, productId, overViewLimit);
-    if (views.length === 0) return res.status(204).set(corsHeaders(req)).end();
+    if (views.length === 0) {
+      console.warn('[pb-offer] No widget views for product', storeId, productId, {
+        ruleCount: rules.length,
+        hasPublicToken: Boolean(publicToken),
+        hasEmbeddedConfig: Boolean(embeddedPublicConfig),
+      });
+      res.status(204).set(corsHeaders(req)).end();
+      return;
+    }
 
     let currency = 'USD';
     try {
@@ -94,4 +119,7 @@ offerRouter.get('/', async (req, res) => {
     if (CLIENT_ERRORS.has(message)) return failResponse(res, req, message, 400);
     res.status(204).set(corsHeaders(req)).end();
   }
-});
+}
+
+offerRouter.get('/', handleOffer);
+offerRouter.post('/', handleOffer);

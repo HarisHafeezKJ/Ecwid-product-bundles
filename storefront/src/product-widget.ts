@@ -1,6 +1,7 @@
 import type { EcwidPage, RuleType, StorefrontWidgetView } from './types';
 import { fetchOffer } from './api';
 import { getProductId, productPageLooksLikely } from './ecwid';
+import { productIdFromPageUrl } from './instant-site';
 import { debounce } from './utils';
 import { renderBundleOffer } from './widgets/bundle-offer';
 import { renderMixMatchOffer } from './widgets/mix-match-offer';
@@ -34,10 +35,11 @@ const debouncedRemountCheck = debounce(() => {
 export async function initProductWidgets(page?: EcwidPage): Promise<void> {
   if (!productPageLooksLikely(page)) return;
 
-  const productIdNum = getProductId(page);
-  if (productIdNum == null) return;
-
-  const productId = String(productIdNum);
+  const productId = await resolveProductId(page);
+  if (!productId) {
+    console.warn('[pb-bundles] Could not resolve product id on product page');
+    return;
+  }
 
   const existingHost = document.getElementById(MOUNT_ID);
   if (
@@ -63,6 +65,7 @@ export async function initProductWidgets(page?: EcwidPage): Promise<void> {
 
     const views = await loadViews(productId);
     if (!views.length) {
+      console.warn('[pb-bundles] No offers returned for product', productId);
       host.innerHTML = '';
       return;
     }
@@ -118,6 +121,18 @@ function normalizeViews(
   if (response.views?.length) return response.views;
   if (response.view) return [response.view];
   return [];
+}
+
+async function resolveProductId(page?: EcwidPage, timeoutMs = 10000): Promise<string | undefined> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const fromApi = getProductId(page);
+    if (fromApi != null) return String(fromApi);
+    const fromUrl = productIdFromPageUrl();
+    if (fromUrl != null) return String(fromUrl);
+    await new Promise((resolve) => window.setTimeout(resolve, 200));
+  }
+  return undefined;
 }
 
 /** Instant Site renders product-details after ec-store mounts; avoid attaching to ec-store root. */

@@ -4,10 +4,11 @@ import {
   instantSiteProductPage,
   isInstantSiteHost,
   productIdFromPageUrl,
+  publicConfigFromInitialState,
   publicTokenFromInitialState,
   storeIdFromHostname,
 } from './instant-site';
-import { appRootFromScript, clientIdFromScript, findOwnScript } from './script-config';
+import { appRootFromScript, clientIdFromScript, clientIdSync, findOwnScript } from './script-config';
 
 let cachedClientId: string | undefined;
 
@@ -190,8 +191,18 @@ export function cartLineSnapshots(cart: EcwidCart | null): CartLineSnapshotPaylo
   }).filter((line) => line.productId && line.quantity > 0);
 }
 
+export function resolveClientIdSync(): string | undefined {
+  return clientIdSync() ?? cachedClientId;
+}
+
 export async function resolveClientId(): Promise<string | undefined> {
   if (cachedClientId) return cachedClientId;
+
+  const fromSync = clientIdSync();
+  if (fromSync) {
+    cachedClientId = fromSync;
+    return cachedClientId;
+  }
 
   const fromScript = clientIdFromScript(findOwnScript());
   if (fromScript) {
@@ -210,8 +221,14 @@ export async function resolveClientId(): Promise<string | undefined> {
   }
 }
 
+export function getEmbeddedPublicConfig(): Record<string, unknown> | null {
+  const clientId = resolveClientIdSync();
+  if (!clientId) return null;
+  return publicConfigFromInitialState(clientId);
+}
+
 export async function getPublicToken(): Promise<string | undefined> {
-  const clientId = await resolveClientId();
+  const clientId = resolveClientIdSync() ?? (await resolveClientId());
   if (!clientId) return undefined;
 
   const fromState = publicTokenFromInitialState(clientId);

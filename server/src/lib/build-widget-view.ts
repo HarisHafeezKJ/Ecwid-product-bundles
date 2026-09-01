@@ -1,4 +1,4 @@
-import type { BundleRule, CatalogProduct, StorefrontWidgetView } from '@pb/shared';
+import type { BundleItem, BundleRule, CatalogProduct, StorefrontWidgetView } from '@pb/shared';
 import {
   bundleLineSale,
   exactVolumeUnitPrice,
@@ -72,6 +72,36 @@ function totalsForMix(rule: BundleRule, products: CatalogProduct[]): { original:
   return { original, discounted };
 }
 
+function stubProductFromItem(item: BundleItem): CatalogProduct {
+  return {
+    id: item.productId,
+    name: item.name ?? item.productId,
+    sku: item.sku,
+    price: item.price ?? 0,
+    imageUrl: item.imageUrl,
+    inStock: true,
+  };
+}
+
+function mergeProductsWithRuleItems(
+  loaded: CatalogProduct[],
+  items: BundleItem[],
+  productIds: string[],
+): CatalogProduct[] {
+  const byId = new Map(loaded.map((p) => [p.id, p]));
+  const merged: CatalogProduct[] = [];
+  for (const id of productIds) {
+    const fromApi = byId.get(id);
+    if (fromApi) {
+      merged.push(fromApi);
+      continue;
+    }
+    const item = items.find((row) => row.productId === id);
+    if (item) merged.push(stubProductFromItem(item));
+  }
+  return merged;
+}
+
 export async function buildWidgetViewForRule(
   tokens: EcwidStoreTokens,
   rule: BundleRule,
@@ -104,7 +134,8 @@ export async function buildWidgetViewForRule(
   productIds = [...new Set(productIds.filter(Boolean))];
   if (productIds.length === 0) return null;
 
-  const products = (await getProducts(tokens, productIds)).filter(productInStock);
+  const loaded = (await getProducts(tokens, productIds)).filter(productInStock);
+  const products = mergeProductsWithRuleItems(loaded, items, productIds).filter(productInStock);
   if (products.length === 0) return null;
 
   if (rule.ruleType === 'FIXED_BUNDLE') {

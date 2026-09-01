@@ -6,7 +6,7 @@ import type {
   OfferResponse,
   RuleType,
 } from './types';
-import { getPublicToken, getStoreId } from './ecwid';
+import { getEmbeddedPublicConfig, getPublicToken, getStoreId } from './ecwid';
 import { apiBaseFromScript, findOwnScript } from './script-config';
 
 let apiBaseUrl = '';
@@ -48,17 +48,24 @@ export async function fetchOffer(params: {
   ruleType?: RuleType;
   ruleId?: string;
 }): Promise<OfferResponse | null> {
+  const storeId = getStoreId();
   const publicToken = await getPublicToken();
-  const url = storefrontUrl('/offer', {
-    productId: params.productId,
-    ruleType: params.ruleType,
-    ruleId: params.ruleId,
-    publicToken: publicToken ?? undefined,
-  });
-  const res = await fetch(url, {
-    method: 'GET',
+  const publicConfig = getEmbeddedPublicConfig();
+  const res = await fetch(storefrontUrl('/offer'), {
+    method: 'POST',
     credentials: 'include',
-    headers: { Accept: 'application/json' },
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      productId: params.productId,
+      ruleType: params.ruleType,
+      ruleId: params.ruleId,
+      storeId,
+      publicToken: publicToken ?? undefined,
+      publicConfig: publicConfig ?? undefined,
+    }),
   });
   return parseJson<OfferResponse>(res);
 }

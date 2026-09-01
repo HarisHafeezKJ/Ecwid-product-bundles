@@ -52,3 +52,8 @@ export function clientIdFromScript(script: HTMLScriptElement | null): string | u
   const fromScript = script?.getAttribute('data-app-id')?.trim();
   return fromScript || undefined;
 }
+
+/** Sync client id resolution (before async config fetch). */
+export function clientIdSync(): string | undefined {
+  return clientIdFromScript(findOwnScript());
+}
