@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CatalogProduct } from '@pb/shared';
 import * as api from '../api/client';
 
@@ -33,23 +33,32 @@ export function useProducts(initialQuery = '') {
 
 export function useProductMap(productIds: string[]) {
   const [map, setMap] = useState<Record<string, CatalogProduct>>({});
+  const idsKey = useMemo(
+    () =>
+      [...new Set(productIds.filter(Boolean))]
+        .sort()
+        .join(','),
+    [productIds],
+  );
 
   useEffect(() => {
-    const missing = productIds.filter((id) => id && !map[id]);
-    if (missing.length === 0) return;
+    if (!idsKey) return;
+    const ids = idsKey.split(',');
     void (async () => {
       try {
-        const products = await api.searchProducts('');
-        const next = { ...map };
-        for (const p of products) {
-          next[p.id] = p;
-        }
-        setMap(next);
+        const products = await api.fetchProductsByIds(ids);
+        setMap((prev) => {
+          const next = { ...prev };
+          for (const product of products) {
+            next[product.id] = product;
+          }
+          return next;
+        });
       } catch {
         /* ignore */
       }
     })();
-  }, [productIds, map]);
+  }, [idsKey]);
 
   return map;
 }

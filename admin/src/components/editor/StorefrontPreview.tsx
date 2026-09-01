@@ -1,5 +1,6 @@
 import { bundleLineSale, formatMoney } from '@pb/shared';
 import { mixCtaLabel } from '@pb/shared';
+import { useProductMap } from '../../hooks/useProducts';
 import type { OfferDraft } from './editor-draft';
 
 interface StorefrontPreviewProps {
@@ -26,6 +27,9 @@ function cssVars(style: OfferDraft['widgetStyle']): React.CSSProperties {
 export default function StorefrontPreview({ draft }: StorefrontPreviewProps) {
   const style = draft.widgetStyle;
   const vars = cssVars(style);
+  const bundleItemIds =
+    draft.ruleType === 'FIXED_BUNDLE' ? draft.items.components.map((item) => item.productId) : [];
+  const bundleProductMap = useProductMap(bundleItemIds);
 
   if (draft.ruleType === 'VOLUME_DISCOUNT') {
     const tiers = draft.volumeTiers.tiers;
@@ -76,6 +80,7 @@ export default function StorefrontPreview({ draft }: StorefrontPreviewProps) {
 
   if (draft.ruleType === 'FIXED_BUNDLE') {
     const items = draft.items.components;
+    const productMap = bundleProductMap;
     const original = items.reduce((sum, item) => sum + (item.price ?? 19.99) * (item.minQuantity ?? 1), 0);
     const discounted = items.reduce(
       (sum, item) =>
@@ -89,16 +94,29 @@ export default function StorefrontPreview({ draft }: StorefrontPreviewProps) {
         <h3 style={{ margin: '0 0 12px', color: 'var(--pb-block-title-color)', fontSize: 'var(--pb-block-title-size)' }}>
           {style.blockTitle}
         </h3>
-        {items.map((item, i) => (
+        {items.map((item, i) => {
+          const imageUrl = item.imageUrl ?? productMap[item.productId]?.imageUrl;
+          return (
           <div key={item.productId} style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'center' }}>
-            <div style={{ width: 48, height: 48, background: '#f1f5f9', borderRadius: 8 }} />
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt=""
+                style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }}
+              />
+            ) : (
+              <div style={{ width: 48, height: 48, background: '#f1f5f9', borderRadius: 8 }} />
+            )}
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, color: style.productTitleColor }}>{item.name ?? `Product ${i + 1}`}</div>
+              <div style={{ fontWeight: 600, color: style.productTitleColor }}>
+                {item.name ?? productMap[item.productId]?.name ?? `Product ${i + 1}`}
+              </div>
               <div style={{ fontSize: 12, color: style.productQtyColor }}>Qty {item.minQuantity ?? 1}</div>
             </div>
             <div style={{ color: style.productPriceColor }}>{formatMoney(item.price ?? 19.99)}</div>
           </div>
-        ))}
+          );
+        })}
         <div style={{ marginTop: 8, fontWeight: 600, color: style.buyAllColor }}>
           {style.buyAllAtText} {formatMoney(discounted)}{' '}
           <span style={{ textDecoration: 'line-through', color: '#94a3b8', fontWeight: 400 }}>

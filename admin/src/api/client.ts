@@ -90,6 +90,17 @@ export async function searchProducts(query: string, limit = 24): Promise<Catalog
   return data.products ?? [];
 }
 
+export async function fetchProductsByIds(ids: string[]): Promise<CatalogProduct[]> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) return [];
+  const res = await fetch(apiUrl('/products', { ids: unique.join(',') }), {
+    credentials: 'include',
+    headers: requestHeaders(),
+  });
+  const data = await parseJson<{ products: CatalogProduct[] }>(res);
+  return data.products ?? [];
+}
+
 export async function setCartScriptEnabled(enabled: boolean): Promise<void> {
   const res = await fetch(apiUrl('/settings/cart-upsell'), {
     method: 'PATCH',

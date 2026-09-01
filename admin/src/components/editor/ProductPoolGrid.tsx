@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { CatalogProduct } from '@pb/shared';
 import { formatMoney } from '@pb/shared';
-import { useProducts } from '../../hooks/useProducts';
+import { useProducts, useProductMap } from '../../hooks/useProducts';
 
 interface ProductPoolGridProps {
   selectedIds: string[];
@@ -18,21 +18,36 @@ export default function ProductPoolGrid({
   onChange,
 }: ProductPoolGridProps) {
   const { query, setQuery, products, loading } = useProducts();
+  const selectedProductMap = useProductMap(selectedIds);
 
   useEffect(() => {
     if (externalQuery != null) setQuery(externalQuery);
   }, [externalQuery, setQuery]);
 
+  const displayProducts = useMemo(() => {
+    const byId = new Map<string, CatalogProduct>();
+    for (const id of selectedIds) {
+      const selected = selectedProductMap[id];
+      if (selected) byId.set(id, selected);
+    }
+    for (const product of products) {
+      byId.set(product.id, product);
+    }
+    return Array.from(byId.values());
+  }, [selectedIds, selectedProductMap, products]);
+
   const toggle = (product: CatalogProduct) => {
     const exists = selectedIds.includes(product.id);
     if (exists) {
       const next = selectedIds.filter((id) => id !== product.id);
-      onChange(next, products.filter((p) => next.includes(p.id)));
+      const pool = [...products, ...Object.values(selectedProductMap)];
+      onChange(next, pool.filter((p) => next.includes(p.id)));
       return;
     }
     if (selectedIds.length >= maxItems) return;
     const next = [...selectedIds, product.id];
-    onChange(next, products.filter((p) => next.includes(p.id)));
+    const pool = [...products, product, ...Object.values(selectedProductMap)];
+    onChange(next, pool.filter((p) => next.includes(p.id)));
   };
 
   return (
@@ -48,7 +63,7 @@ export default function ProductPoolGrid({
       )}
       {loading && <p className="field-hint">Searching…</p>}
       <div className="product-grid">
-        {products.map((product) => {
+        {displayProducts.map((product) => {
           const selected = selectedIds.includes(product.id);
           return (
             <button

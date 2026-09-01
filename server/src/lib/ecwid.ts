@@ -58,6 +58,32 @@ async function ecwidFetch<T>(
   return (await res.json()) as T;
 }
 
+function productImageUrl(raw: Record<string, unknown>): string | undefined {
+  const defaultImage = raw.defaultImage as Record<string, unknown> | undefined;
+  const fromDefault = defaultImage?.url ?? defaultImage?.imageUrl ?? defaultImage?.thumbnailUrl;
+  if (fromDefault) return String(fromDefault);
+
+  const rootCandidates = [
+    raw.imageUrl,
+    raw.thumbnailUrl,
+    raw.smallThumbnailUrl,
+    raw.hdThumbnailUrl,
+  ];
+  for (const candidate of rootCandidates) {
+    if (candidate) return String(candidate);
+  }
+
+  const imageCollections = [raw.mediaImages, raw.galleryImages];
+  for (const collection of imageCollections) {
+    if (!Array.isArray(collection) || collection.length === 0) continue;
+    const img = collection[0] as Record<string, unknown>;
+    const url = img.url ?? img.imageUrl ?? img.thumbnailUrl ?? img.smallThumbnailUrl;
+    if (url) return String(url);
+  }
+
+  return undefined;
+}
+
 function mapEcwidProduct(raw: Record<string, unknown>): CatalogProduct {
   const id = String(raw.id ?? '');
   const combinations = Array.isArray(raw.combinations) ? raw.combinations : [];
@@ -100,7 +126,7 @@ function mapEcwidProduct(raw: Record<string, unknown>): CatalogProduct {
     sku: String(raw.sku ?? '') || undefined,
     price: Number(raw.price ?? 0),
     compareToPrice: Number(raw.compareToPrice ?? 0) || undefined,
-    imageUrl: String((raw.defaultImage as Record<string, unknown> | undefined)?.url ?? raw.thumbnailUrl ?? '') || undefined,
+    imageUrl: productImageUrl(raw),
     inStock: raw.inStock !== false && Number(raw.quantity ?? 1) !== 0,
     quantity: Number(raw.quantity ?? 0) || undefined,
     variants: variants.length > 0 ? variants : undefined,

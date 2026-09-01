@@ -1,5 +1,6 @@
 import type { BundleItem, CatalogProduct } from '@pb/shared';
 import { formatMoney } from '@pb/shared';
+import { useProductMap } from '../../hooks/useProducts';
 import type { OfferDraft } from './editor-draft';
 import ProductPoolGrid from './ProductPoolGrid';
 
@@ -31,8 +32,12 @@ function BundleItemCard({
   return (
     <div className="section-card" style={{ marginBottom: 12 }}>
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-        {product?.imageUrl ? (
-          <img src={product.imageUrl} alt="" style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover' }} />
+        {product?.imageUrl ?? item.imageUrl ? (
+          <img
+            src={product?.imageUrl ?? item.imageUrl}
+            alt=""
+            style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover' }}
+          />
         ) : (
           <div style={{ width: 56, height: 56, background: 'var(--pb-surface-2)', borderRadius: 8 }} />
         )}
@@ -106,6 +111,7 @@ function BundleItemCard({
 
 export default function EditorBundleProducts({ draft, onChange }: EditorBundleProductsProps) {
   const items = draft.items.components;
+  const productMap = useProductMap(items.map((item) => item.productId));
 
   const updateItems = (next: BundleItem[]) => {
     onChange({
@@ -130,7 +136,7 @@ export default function EditorBundleProducts({ draft, onChange }: EditorBundlePr
         onChange={(ids, products) => {
           const next = ids.map((id) => {
             const existing = items.find((i) => i.productId === id);
-            const product = products.find((p) => p.id === id);
+            const product = products.find((p) => p.id === id) ?? productMap[id];
             return (
               existing ?? {
                 productId: id,
@@ -151,11 +157,18 @@ export default function EditorBundleProducts({ draft, onChange }: EditorBundlePr
           <BundleItemCard
             key={item.productId}
             item={item}
+            product={productMap[item.productId]}
             index={index}
             total={items.length}
             onChange={(updated) => {
               const next = [...items];
-              next[index] = updated;
+              const catalog = productMap[item.productId];
+              next[index] = {
+                ...updated,
+                name: updated.name ?? catalog?.name ?? item.name,
+                imageUrl: updated.imageUrl ?? catalog?.imageUrl ?? item.imageUrl,
+                price: updated.price ?? catalog?.price ?? item.price,
+              };
               updateItems(next);
             }}
             onRemove={() => updateItems(items.filter((_, i) => i !== index))}
