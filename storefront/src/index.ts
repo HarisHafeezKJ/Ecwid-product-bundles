@@ -6,6 +6,8 @@ import { startVolumeCartSync } from './cart-upsell/volume-cart-bind';
 import {
   cartPageLooksLikely,
   getPageType,
+  getProductId,
+  getStoreId,
   onPageLoaded,
   productPageLooksLikely,
   whenEcwidReady,
@@ -56,6 +58,11 @@ function bootstrap(): void {
   resolveApiBaseUrl();
 
   whenEcwidReady(() => {
+    console.info('[pb-bundles] storefront ready', {
+      storeId: getStoreId(),
+      page: getPageType(),
+      productId: getProductId(),
+    });
     startVolumeCartSync();
 
     onPageLoaded((page) => handlePage(page));
@@ -74,6 +81,8 @@ export function init(): void {
 }
 
 bootstrap();
+
+console.info('[pb-bundles] script loaded', window.location.href);
 
 window.PbBundles = { init };
 

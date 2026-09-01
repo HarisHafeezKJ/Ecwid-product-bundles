@@ -63,17 +63,23 @@ function ensureProductHost(): HTMLElement {
   host.className = 'pb-product-bundles';
 
   const anchor =
+    document.querySelector('.ec-store') ??
+    document.querySelector('[data-block="store"]') ??
     document.querySelector('.product-details') ??
     document.querySelector('.ecwid-productBrowser-details') ??
     document.querySelector('.details-product-page') ??
     document.querySelector('.product-details-module') ??
-    document.querySelector('[data-hook="product-page"]');
+    document.querySelector('[data-hook="product-page"]') ??
+    document.querySelector('.StorefrontCatalogTile') ??
+    document.querySelector('#static-html');
 
   if (anchor instanceof HTMLElement) {
     const options =
       anchor.querySelector('.product-options') ??
       anchor.querySelector('.ecwid-productBrowser-options') ??
-      anchor.querySelector('.details-product-option');
+      anchor.querySelector('.details-product-option') ??
+      anchor.querySelector('button[type="submit"]') ??
+      anchor.querySelector('[class*="add-to"]');
     if (options?.parentElement) {
       options.parentElement.insertBefore(host, options.nextSibling);
     } else {
