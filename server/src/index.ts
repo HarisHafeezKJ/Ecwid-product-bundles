@@ -29,15 +29,19 @@ fetch('http://127.0.0.1:7627/ingest/17a22ea5-cb1e-474a-bba3-194752c05bb0',{metho
 const app = express();
 const port = getPort();
 
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (!origin || isAllowedOrigin(origin)) callback(null, true);
-      else callback(new Error('Not allowed by CORS'));
-    },
-    credentials: true,
-  }),
-);
+const apiCors = cors({
+  origin(origin, callback) {
+    if (!origin || isAllowedOrigin(origin)) callback(null, true);
+    else callback(null, false);
+  },
+  credentials: true,
+});
+
+// Static assets (admin/storefront) must not fail when Ecwid iframe sends a foreign Origin header.
+app.use('/storefront', express.static(storefrontDist));
+app.use('/admin/assets', express.static(path.join(adminDist, 'assets')));
+
+app.use(apiCors);
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
 app.use(sessionMiddleware);
@@ -64,15 +68,15 @@ app.use('/api/storefront/cart-upsell', cartUpsellRouter);
 app.use('/api/storefront/sync-volume-cart', syncVolumeCartRouter);
 app.use('/api/webhooks/orders', ordersWebhookRouter);
 
-const storefrontDistPath = storefrontDist;
-app.use('/storefront', express.static(storefrontDistPath));
-
 const adminDistPath = adminDist;
-app.use(manifest.paths.adminMount, express.static(adminDistPath));
 app.get(manifest.paths.adminMount, (_req, res) => {
   res.sendFile(path.join(adminDistPath, 'index.html'));
 });
-app.get(`${manifest.paths.adminMount}/*`, (_req, res) => {
+app.get(`${manifest.paths.adminMount}/*`, (req, res, next) => {
+  if (req.path.includes('/assets/')) {
+    next();
+    return;
+  }
   res.sendFile(path.join(adminDistPath, 'index.html'));
 });
 

@@ -1,5 +1,11 @@
 const SESSION_STORAGE_KEY = 'pb_session_bootstrap';
 
+type EcwidAppGlobal = {
+  EcwidApp?: {
+    init: (options: { app_id: string; autoloadedflag: boolean; autoheight: boolean }) => void;
+  };
+};
+
 /** Persist OAuth bootstrap token for Chrome iframe contexts that block third-party cookies. */
 export function captureSessionBootstrapFromUrl(): void {
   const params = new URLSearchParams(window.location.search);
@@ -34,13 +40,52 @@ export function dashboardAuthHeaders(): Record<string, string> {
   return headers;
 }
 
+async function authenticateEcwidPayload(): Promise<boolean> {
+  const params = new URLSearchParams(window.location.search);
+  const payload = params.get('payload')?.trim();
+  if (!payload) return false;
+
+  const res = await fetch('/api/auth/ecwid-payload', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ payload }),
+  });
+  if (!res.ok) return false;
+
+  const data = (await res.json()) as { bootstrap?: string; clientId?: string };
+  if (data.bootstrap) sessionStorage.setItem(SESSION_STORAGE_KEY, data.bootstrap);
+  if (data.clientId) initEcwidNativeShell(data.clientId);
+
+  params.delete('payload');
+  const query = params.toString();
+  window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+  return true;
+}
+
+function initEcwidNativeShell(clientId: string): void {
+  if (window.self === window.top) return;
+  const w = window as Window & EcwidAppGlobal;
+  if (!w.EcwidApp) return;
+  w.EcwidApp.init({
+    app_id: clientId,
+    autoloadedflag: true,
+    autoheight: true,
+  });
+}
+
 export async function checkDashboardSession(): Promise<boolean> {
   captureSessionBootstrapFromUrl();
   await requestEmbeddedStorageAccess();
+  await authenticateEcwidPayload();
+
   const res = await fetch('/api/auth/session', {
     credentials: 'include',
     headers: dashboardAuthHeaders(),
   });
-  const data = (await res.json()) as { authenticated?: boolean };
+  const data = (await res.json()) as { authenticated?: boolean; clientId?: string };
+  if (data.authenticated && data.clientId) {
+    initEcwidNativeShell(data.clientId);
+  }
   return Boolean(data.authenticated);
 }

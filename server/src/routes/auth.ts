@@ -8,8 +8,9 @@ import {
   sessionMiddleware,
   setSession,
 } from '../lib/auth.js';
-import { jsonResponse } from '../lib/api-response.js';
-import { getManifest, getRequestBaseUrl, isProduction } from '../lib/config.js';
+import { jsonResponse, failResponse } from '../lib/api-response.js';
+import { getEcwidClientId, getEcwidClientSecret, getManifest, getRequestBaseUrl, isProduction } from '../lib/config.js';
+import { decryptEcwidPayload } from '../lib/ecwid-payload.js';
 
 export const authRouter = Router();
 
@@ -46,7 +47,40 @@ authRouter.get('/session', sessionMiddleware, (req, res) => {
   jsonResponse(res, req, {
     authenticated: Boolean(req.session?.storeId),
     storeId: req.session?.storeId ?? null,
+    clientId: getEcwidClientId(),
   });
+});
+
+/** Ecwid native app iframe — decrypt `payload` query param and establish session. */
+authRouter.post('/ecwid-payload', async (req, res) => {
+  try {
+    const encrypted = String(req.body?.payload ?? '').trim();
+    if (!encrypted) {
+      failResponse(res, req, 'Missing payload', 400);
+      return;
+    }
+
+    const decoded = decryptEcwidPayload(encrypted, getEcwidClientSecret());
+    const storeId = String(decoded.store_id);
+    const accessToken = decoded.access_token;
+    await persistStoreAuth(storeId, accessToken, decoded.public_token);
+    const sessionToken = setSession(res, storeId, accessToken);
+
+    // #region agent log
+    fetch('http://127.0.0.1:7627/ingest/17a22ea5-cb1e-474a-bba3-194752c05bb0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c36960'},body:JSON.stringify({sessionId:'c36960',location:'auth.ts:ecwid-payload',message:'Ecwid iframe payload authenticated',data:{storeId,lang:decoded.lang},timestamp:Date.now(),hypothesisId:'J',runId:'post-fix'})}).catch(()=>{});
+    // #endregion
+
+    jsonResponse(res, req, {
+      ok: true,
+      storeId,
+      lang: decoded.lang ?? 'en',
+      bootstrap: sessionToken,
+      clientId: getEcwidClientId(),
+    });
+  } catch (err) {
+    console.error('Ecwid payload auth failed', err);
+    failResponse(res, req, 'Invalid Ecwid payload', 401);
+  }
 });
 
 /** Local development — authenticate with storeId + accessToken in JSON body. */

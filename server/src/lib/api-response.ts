@@ -3,9 +3,10 @@ import type { Request, Response } from 'express';
 const ECWID_ORIGIN_PATTERNS = [
   /^https?:\/\/localhost(:\d+)?$/i,
   /^https?:\/\/127\.0\.0\.1(:\d+)?$/i,
-  /^https:\/\/([a-z0-9-]+\.)*ecwid\.com$/i,
+  /^https:\/\/([a-z0-9-]+\.)*ecwid\.(com|ru|net)(:\d+)?$/i,
   /^https:\/\/([a-z0-9-]+\.)*company\.site$/i,
   /^https:\/\/([a-z0-9-]+\.)*myshopify\.com$/i,
+  /^https:\/\/([a-z0-9-]+\.)*vercel\.app$/i,
 ];
 
 export function isAllowedOrigin(origin: string | undefined): boolean {
