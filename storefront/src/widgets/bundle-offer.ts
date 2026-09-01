@@ -27,6 +27,11 @@ function bindBundleOffer(root: HTMLElement, state: WidgetShellState): void {
 
 async function handleBundleAtc(root: HTMLElement, state: WidgetShellState): Promise<void> {
   if (state.adding) return;
+  const errEl = qs<HTMLElement>(root, '[data-pb-error]');
+  if (errEl) {
+    errEl.hidden = true;
+    errEl.textContent = '';
+  }
   state.adding = true;
   setAddingState(root, true, state.view);
   try {

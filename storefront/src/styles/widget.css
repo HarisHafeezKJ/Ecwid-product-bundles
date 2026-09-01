@@ -61,7 +61,7 @@
 }
 
 .pb-btn {
-  display: inline-flex;
+  display: inline-flex !important;
   align-items: center;
   justify-content: center;
   width: 100%;
@@ -80,6 +80,15 @@
   letter-spacing: normal;
   line-height: 1.25;
   font-family: inherit;
+  visibility: visible !important;
+  opacity: 1 !important;
+  min-height: 44px;
+}
+
+.pb-product-bundles .pb-btn,
+#pb-product-bundles .pb-btn {
+  background: var(--pb-add-to-cart-bg, #111827) !important;
+  color: var(--pb-add-to-cart-color, #fff) !important;
 }
 
 .pb-btn:disabled {

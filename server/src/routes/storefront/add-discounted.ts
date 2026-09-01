@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { getBundleRule } from '../../lib/db/rules.js';
 import { addToCart } from '../../lib/ecwid.js';
 import { pricedLinesToEcwidCartLines } from '../../lib/ecwid-cart-lines.js';
 import { priceLinesForRule } from '../../lib/price-lines-for-rule.js';
+import { resolveStorefrontBundleRule } from '../../lib/storefront-rules.js';
 import { CLIENT_ERRORS, corsHeaders, failResponse, jsonResponse } from '../../lib/api-response.js';
 import { resolveStorefrontTokens } from '../../lib/storefront-tokens.js';
 import { requireStoreId } from '../../lib/store-context.js';
@@ -29,7 +29,12 @@ addDiscountedRouter.post('/', async (req, res) => {
     );
     if (!tokens) return failResponse(res, req, 'Store not found', 404);
 
-    const rule = await getBundleRule(storeId, ruleId);
+    const rule = await resolveStorefrontBundleRule(
+      storeId,
+      ruleId,
+      tokens,
+      req.body?.publicConfig,
+    );
     if (!rule || rule.status !== 'ACTIVE') return failResponse(res, req, 'Rule not found', 404);
 
     const normalized = lines.map((line: Record<string, unknown>) => ({

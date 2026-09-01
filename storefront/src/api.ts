@@ -34,6 +34,17 @@ function storefrontUrl(path: string, query?: Record<string, string | undefined>)
   return url.toString();
 }
 
+function parseApiError(text: string, status: number): string {
+  const trimmed = text.trim();
+  if (!trimmed) return `Request failed (${status})`;
+  try {
+    const data = JSON.parse(trimmed) as { error?: string; message?: string };
+    return data.error || data.message || trimmed;
+  } catch {
+    return trimmed;
+  }
+}
+
 async function parseJson<T>(res: Response): Promise<T | null> {
   if (res.status === 204 || res.status === 404) return null;
   if (!res.ok) {
@@ -73,6 +84,7 @@ export async function fetchOffer(params: {
 export async function addDiscounted(body: AddDiscountedRequest): Promise<AddDiscountedResponse> {
   const storeId = getStoreId();
   const publicToken = await getPublicToken();
+  const publicConfig = getEmbeddedPublicConfig();
   const res = await fetch(storefrontUrl('/add-discounted'), {
     method: 'POST',
     credentials: 'include',
@@ -84,16 +96,12 @@ export async function addDiscounted(body: AddDiscountedRequest): Promise<AddDisc
       ...body,
       storeId,
       publicToken: publicToken ?? undefined,
+      publicConfig: publicConfig ?? undefined,
     }),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    try {
-      const data = JSON.parse(text) as { error?: string };
-      throw new Error(data.error || text || `Request failed (${res.status})`);
-    } catch {
-      throw new Error(text || `Request failed (${res.status})`);
-    }
+    throw new Error(parseApiError(text, res.status));
   }
   const data = (await res.json()) as AddDiscountedResponse;
   if (!data?.ok) throw new Error('Could not add to cart.');

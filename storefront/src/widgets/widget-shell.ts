@@ -154,6 +154,11 @@ export function showWidgetError(root: HTMLElement, message: string): void {
     err.hidden = false;
     err.textContent = message;
   }
+  const btn = qs<HTMLButtonElement>(root, '[data-pb-atc]');
+  if (btn) {
+    btn.hidden = false;
+    btn.style.visibility = 'visible';
+  }
 }
 
 export function setAddingState(root: HTMLElement, adding: boolean, view: StorefrontWidgetView): void {

@@ -58,5 +58,6 @@ export const CLIENT_ERRORS = new Set([
   'Invalid ruleType',
   'Rule not found',
   'Store not found',
+  'Store not authenticated',
   'Unauthorized',
 ]);
