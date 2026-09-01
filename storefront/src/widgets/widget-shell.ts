@@ -43,6 +43,7 @@ export function primeVariantSelections(
 ): void {
   for (const item of items) {
     const variants = item.variants ?? [];
+    if (variants.length <= 1) continue;
     const defaultId = item.defaultVariantId ?? variants[0]?.id;
     if (defaultId) map[item.productId] = defaultId;
   }
@@ -115,22 +116,37 @@ async function addEcwidLines(lines: EcwidCartLinePayload[]): Promise<void> {
 
   let addedCount = 0;
   for (const line of lines) {
-    let added = await tryAddEcwidLine(cartApi, line);
-    if (!added && line.options) {
-      const withoutStamp = stripStampOptions(line.options);
-      if (withoutStamp && Object.keys(withoutStamp).length > 0) {
-        added = await tryAddEcwidLine(cartApi, { ...line, options: withoutStamp });
-      }
-      if (!added) {
-        added = await tryAddEcwidLine(cartApi, { ...line, options: undefined });
-      }
-    }
+    const added = await addEcwidLineWithFallbacks(cartApi, line);
     if (added) addedCount += 1;
+    await new Promise((resolve) => window.setTimeout(resolve, 120));
   }
 
   if (addedCount === 0) {
     throw new Error('Could not add to cart.');
   }
+  if (lines.length > 1 && addedCount < lines.length) {
+    throw new Error(`Only ${addedCount} of ${lines.length} bundle items were added to the cart.`);
+  }
+}
+
+async function addEcwidLineWithFallbacks(
+  cartApi: NonNullable<NonNullable<ReturnType<typeof getEcwid>>['Cart']>,
+  line: EcwidCartLinePayload,
+): Promise<boolean> {
+  const variantOptions = stripStampOptions(line.options);
+  const attempts: EcwidCartLinePayload[] = [
+    { ...line, options: variantOptions, selectedPrice: undefined },
+    { ...line, options: undefined, selectedPrice: undefined },
+  ];
+  if (variantOptions) {
+    attempts.push({ ...line, options: variantOptions });
+  }
+  attempts.push({ ...line, options: undefined });
+
+  for (const attempt of attempts) {
+    if (await tryAddEcwidLine(cartApi, attempt)) return true;
+  }
+  return false;
 }
 
 async function tryAddEcwidLine(
@@ -177,7 +193,8 @@ export function collectBundleLines(
   const lines: { productId: string; quantity: number; variantId?: string }[] = [];
   for (const item of view.items) {
     const qty = item.minQuantity || 1;
-    if (item.chooseVariationPerItem && qty > 1 && (item.variants?.length ?? 0) > 1) {
+    const hasVariants = (item.variants?.length ?? 0) > 1;
+    if (item.chooseVariationPerItem && qty > 1 && hasVariants) {
       for (let u = 0; u < qty; u++) {
         const key = `${item.productId}__u${u}`;
         lines.push({
@@ -190,7 +207,7 @@ export function collectBundleLines(
       lines.push({
         productId: item.productId,
         quantity: qty,
-        variantId: selections[item.productId],
+        variantId: hasVariants ? selections[item.productId] : undefined,
       });
     }
   }

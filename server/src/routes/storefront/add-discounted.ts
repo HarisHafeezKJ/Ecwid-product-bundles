@@ -1,11 +1,45 @@
 import { Router } from 'express';
+import type { BundleRule } from '@pb/shared';
+import { parseBundleItems } from '@pb/shared';
 import { addToCart } from '../../lib/ecwid.js';
 import { pricedLinesToEcwidCartLines } from '../../lib/ecwid-cart-lines.js';
-import { priceLinesForRule } from '../../lib/price-lines-for-rule.js';
+import { priceLinesForRule, type PriceLineInput } from '../../lib/price-lines-for-rule.js';
 import { resolveStorefrontBundleRule } from '../../lib/storefront-rules.js';
 import { CLIENT_ERRORS, corsHeaders, failResponse, jsonResponse } from '../../lib/api-response.js';
 import { resolveStorefrontTokens } from '../../lib/storefront-tokens.js';
 import { requireStoreId } from '../../lib/store-context.js';
+
+function normalizeClientLines(lines: unknown[]): PriceLineInput[] {
+  return lines.map((line) => {
+    const row = line as Record<string, unknown>;
+    const variantId = row.variantId ? String(row.variantId).trim() : '';
+    return {
+      productId: String(row.productId ?? ''),
+      variantId: variantId || undefined,
+      quantity: Math.max(1, Number(row.quantity ?? 1)),
+    };
+  });
+}
+
+function expandLinesForRule(rule: BundleRule, clientLines: PriceLineInput[]): PriceLineInput[] {
+  if (rule.ruleType !== 'FIXED_BUNDLE') return clientLines;
+
+  const components = parseBundleItems(rule.items).components;
+  if (components.length < 2) return clientLines;
+
+  return components.map((component) => {
+    const hit = clientLines.find((line) => line.productId === component.productId);
+    return {
+      productId: component.productId,
+      quantity: hit?.quantity ?? Math.max(1, component.minQuantity ?? 1),
+      variantId:
+        hit?.variantId ??
+        (component.adminLocksVariant && component.defaultVariantId
+          ? component.defaultVariantId
+          : undefined),
+    };
+  });
+}
 
 export const addDiscountedRouter = Router();
 
@@ -37,11 +71,7 @@ addDiscountedRouter.post('/', async (req, res) => {
     );
     if (!rule || rule.status !== 'ACTIVE') return failResponse(res, req, 'Rule not found', 404);
 
-    const normalized = lines.map((line: Record<string, unknown>) => ({
-      productId: String(line.productId ?? ''),
-      variantId: line.variantId ? String(line.variantId) : undefined,
-      quantity: Math.max(1, Number(line.quantity ?? 1)),
-    }));
+    const normalized = expandLinesForRule(rule, normalizeClientLines(lines));
 
     const priced = await priceLinesForRule(tokens, rule, normalized);
     const result = await addToCart(

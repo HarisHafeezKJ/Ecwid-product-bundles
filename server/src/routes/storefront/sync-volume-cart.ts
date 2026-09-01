@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import type { CartLineSnapshot } from '@pb/shared';
 import { listActiveRulesForStore } from '../../lib/db/rules.js';
-import { listActiveRulesFromPublicConfig } from '../../lib/db/public-rules.js';
+import {
+  listActiveRulesFromEmbeddedPublicConfig,
+  listActiveRulesFromPublicConfig,
+} from '../../lib/db/public-rules.js';
 import { syncVolumeCart } from '../../lib/volume-cart-sync.js';
 import { corsHeaders, failResponse, jsonResponse } from '../../lib/api-response.js';
 import { resolveStorefrontTokens } from '../../lib/storefront-tokens.js';
@@ -53,9 +56,24 @@ syncVolumeCartRouter.post('/', async (req, res) => {
     }
 
     const usePublicRules = Boolean(publicToken) && !cachedPrivate?.accessToken;
-    const rules = usePublicRules
-      ? await listActiveRulesFromPublicConfig(tokens)
-      : await listActiveRulesForStore(storeId);
+    let rules: Awaited<ReturnType<typeof listActiveRulesForStore>> = [];
+    if (!usePublicRules && cachedPrivate?.accessToken) {
+      try {
+        rules = await listActiveRulesForStore(storeId);
+      } catch (err) {
+        console.warn('[pb-sync-volume-cart] listActiveRulesForStore failed', err);
+      }
+    }
+    if (rules.length === 0) {
+      try {
+        rules = await listActiveRulesFromPublicConfig(tokens);
+      } catch (err) {
+        console.warn('[pb-sync-volume-cart] listActiveRulesFromPublicConfig failed', err);
+      }
+    }
+    if (rules.length === 0 && req.body?.publicConfig) {
+      rules = listActiveRulesFromEmbeddedPublicConfig(req.body.publicConfig);
+    }
     const { updated } = await syncVolumeCart(tokens, rules, lines);
 
     jsonResponse(res, req, {

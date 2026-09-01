@@ -23,7 +23,7 @@ const offerCache = new Map<string, StorefrontWidgetView[]>();
 
 const debouncedRemountCheck = debounce(() => {
   if (!productPageLooksLikely()) return;
-  const productIdNum = getProductId();
+  const productIdNum = getProductId() ?? productIdFromPageUrl();
   if (productIdNum == null) return;
 
   const host = document.getElementById(MOUNT_ID);
@@ -124,12 +124,16 @@ function normalizeViews(
 }
 
 async function resolveProductId(page?: EcwidPage, timeoutMs = 10000): Promise<string | undefined> {
+  const fromUrl = productIdFromPageUrl();
+  if (fromUrl != null) return String(fromUrl);
+
+  const fromApi = getProductId(page);
+  if (fromApi != null) return String(fromApi);
+
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const fromApi = getProductId(page);
-    if (fromApi != null) return String(fromApi);
-    const fromUrl = productIdFromPageUrl();
-    if (fromUrl != null) return String(fromUrl);
+    const id = getProductId(page);
+    if (id != null) return String(id);
     await new Promise((resolve) => window.setTimeout(resolve, 200));
   }
   return undefined;

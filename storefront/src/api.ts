@@ -128,6 +128,7 @@ export async function syncVolumeCart(
 
   const storeId = getStoreId();
   const publicToken = await getPublicToken();
+  const publicConfig = getEmbeddedPublicConfig();
   const res = await fetch(storefrontUrl('/sync-volume-cart'), {
     method: 'POST',
     credentials: 'include',
@@ -140,6 +141,7 @@ export async function syncVolumeCart(
       storeId,
       lines,
       publicToken: publicToken ?? undefined,
+      publicConfig: publicConfig ?? undefined,
     }),
   });
   if (!res.ok) return { ok: false, updated: 0 };
