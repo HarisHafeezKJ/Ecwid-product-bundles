@@ -210,6 +210,27 @@ export async function getProduct(
   }
 }
 
+/** Enables Pay What You Want so storefront JS can pass selectedPrice when adding bundle lines. */
+export async function ensureNameYourPriceEnabled(
+  tokens: EcwidStoreTokens,
+  productIds: string[],
+): Promise<void> {
+  if (!tokens.accessToken || productIds.length === 0) return;
+  const unique = [...new Set(productIds.filter(Boolean))];
+  await Promise.all(
+    unique.map(async (productId) => {
+      try {
+        await ecwidFetch(tokens.storeId, tokens.accessToken, `/products/${productId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ nameYourPriceEnabled: true }),
+        });
+      } catch (err) {
+        console.warn('[pb] nameYourPriceEnabled failed', productId, err);
+      }
+    }),
+  );
+}
+
 export async function getProducts(
   tokens: EcwidStoreTokens,
   productIds: string[],

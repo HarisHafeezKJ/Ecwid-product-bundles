@@ -15,7 +15,6 @@
     "oauthCallback": "/api/auth/callback",
     "oauthInstall": "/api/auth/install",
     "webhook": "/api/webhooks/orders",
-    "discountWebhook": "/api/webhooks/discount",
     "storefrontScript": "/storefront.js",
     "storefrontApi": "/api/storefront",
     "dashboardApi": "/api/dashboard",

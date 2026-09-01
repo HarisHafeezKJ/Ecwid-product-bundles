@@ -75,6 +75,7 @@ export async function addDiscountedAndRefresh(
     await refreshCart();
     await new Promise((resolve) => window.setTimeout(resolve, 400));
     await refreshCart();
+    document.dispatchEvent(new CustomEvent('pb-cart-changed'));
     return;
   }
 
@@ -92,6 +93,7 @@ export async function addDiscountedAndRefresh(
   // Second refresh helps Ecwid pick up server-calculated bundle discounts (discountUrl).
   await new Promise((resolve) => window.setTimeout(resolve, 400));
   await refreshCart();
+  document.dispatchEvent(new CustomEvent('pb-cart-changed'));
 }
 
 function pricedLinesToEcwidLines(lines: PricedLineResponse[]): EcwidCartLinePayload[] {

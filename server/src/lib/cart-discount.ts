@@ -17,6 +17,7 @@ export interface EcwidDiscountCartItem {
   amount?: number;
   quantity?: number;
   productPrice?: number;
+  priceInProductList?: number;
   price?: number;
 }
 
@@ -44,21 +45,45 @@ function cartLinesFromItems(items: EcwidDiscountCartItem[]): CartQtyLine[] {
     .filter((line) => line.productId && line.quantity > 0);
 }
 
-function catalogUnitPrice(items: EcwidDiscountCartItem[], productId: string): number {
+function unitPriceFromItem(
+  item: EcwidDiscountCartItem,
+  catalogHint?: number,
+): number {
+  const lineQty = Math.max(1, Number(item.amount ?? item.quantity ?? 1));
+  const productPrice = Number(item.productPrice ?? item.priceInProductList ?? 0);
+  if (productPrice > 0) return productPrice;
+
+  const price = Number(item.price ?? 0);
+  if (price <= 0) return catalogHint ?? 0;
+
+  if (catalogHint != null && catalogHint > 0) {
+    if (Math.abs(price - catalogHint) < 0.02) return catalogHint;
+    if (lineQty > 1 && Math.abs(price - catalogHint * lineQty) < 0.02) return catalogHint;
+  }
+
+  return price;
+}
+
+function catalogUnitPrice(
+  items: EcwidDiscountCartItem[],
+  productId: string,
+  catalogHint?: number,
+): number {
   const pid = Number(productId);
   const hits = items.filter((item) => Number(item.productId) === pid);
-  if (!hits.length) return 0;
+  if (!hits.length) return catalogHint ?? 0;
 
   let total = 0;
   let qty = 0;
   for (const item of hits) {
     const lineQty = Math.max(0, Number(item.amount ?? item.quantity ?? 0));
-    const unit = Number(item.productPrice ?? item.price ?? 0);
+    const unit = unitPriceFromItem(item, catalogHint);
     if (lineQty <= 0 || unit <= 0) continue;
     total += unit * lineQty;
     qty += lineQty;
   }
-  return qty > 0 ? total / qty : 0;
+  if (qty > 0) return total / qty;
+  return catalogHint ?? 0;
 }
 
 function fixedBundleDiscount(
@@ -75,7 +100,8 @@ function fixedBundleDiscount(
   for (const component of components) {
     const qty = cartQtyForProduct(lines, component.productId);
     if (qty <= 0) continue;
-    const catalog = catalogUnitPrice(items, component.productId);
+    const catalogHint = component.price != null && component.price > 0 ? component.price : undefined;
+    const catalog = catalogUnitPrice(items, component.productId, catalogHint);
     if (catalog <= 0) continue;
     const sale = bundleLineSale(catalog, rule.discountType, rule.discountValue);
     savings += Math.max(0, catalog - sale) * qty;

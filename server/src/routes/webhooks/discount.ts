@@ -8,13 +8,16 @@ function parseDiscountCartItems(raw: unknown[]): EcwidDiscountCartItem[] {
   return raw.map((entry) => {
     const row = entry as Record<string, unknown>;
     const qty = Math.max(0, Number(row.amount ?? row.quantity ?? 0));
-    const productPrice = Number(row.productPrice ?? row.priceInProductList ?? row.price ?? 0);
+    const priceInProductList = Number(row.priceInProductList ?? 0);
+    const productPrice = Number(row.productPrice ?? 0);
+    const price = Number(row.price ?? 0);
     return {
       productId: Number(row.productId ?? 0),
       amount: qty,
       quantity: qty,
-      productPrice,
-      price: Number(row.price ?? productPrice),
+      productPrice: productPrice > 0 ? productPrice : priceInProductList > 0 ? priceInProductList : 0,
+      priceInProductList: priceInProductList > 0 ? priceInProductList : undefined,
+      price: price > 0 ? price : productPrice > 0 ? productPrice : priceInProductList,
     };
   });
 }
@@ -40,6 +43,19 @@ discountWebhookRouter.post('/', async (req, res) => {
     }
 
     const result = calculateCartDiscounts(rules, items);
+    if (items.length > 0 && result.discounts.length === 0) {
+      console.warn('[pb-discount-webhook] no discounts for cart', {
+        storeId,
+        itemCount: items.length,
+        productIds: items.map((i) => i.productId),
+        samplePrices: items.slice(0, 3).map((i) => ({
+          productId: i.productId,
+          qty: i.amount,
+          productPrice: i.productPrice,
+          price: i.price,
+        })),
+      });
+    }
     res.status(200).json(result);
   } catch (err) {
     console.error('[pb-discount-webhook] error', err);

@@ -3,6 +3,7 @@
 import { resolveApiBaseUrl, setApiBaseUrl } from './api';
 import { runCartUpsell, teardownCartUpsell } from './cart-upsell/cart-upsell';
 import { startVolumeCartSync } from './cart-upsell/volume-cart-bind';
+import { startBundleCartSync } from './bundle-cart-bind';
 import {
   cartPageLooksLikely,
   getPageType,
@@ -67,6 +68,7 @@ function bootstrap(): void {
       productId: getProductId(),
     });
     startVolumeCartSync();
+    startBundleCartSync();
 
     onPageLoaded((page) => handlePage(page));
 

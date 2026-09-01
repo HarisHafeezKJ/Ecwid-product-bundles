@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import type { BundleRule } from '@pb/shared';
 import { parseBundleItems } from '@pb/shared';
-import { addToCart } from '../../lib/ecwid.js';
+import { addToCart, ensureNameYourPriceEnabled } from '../../lib/ecwid.js';
 import { pricedLinesToEcwidCartLines } from '../../lib/ecwid-cart-lines.js';
 import { priceLinesForRule, type PriceLineInput } from '../../lib/price-lines-for-rule.js';
 import { resolveStorefrontBundleRule } from '../../lib/storefront-rules.js';
 import { CLIENT_ERRORS, corsHeaders, failResponse, jsonResponse } from '../../lib/api-response.js';
 import { resolveStorefrontTokens } from '../../lib/storefront-tokens.js';
 import { requireStoreId } from '../../lib/store-context.js';
+import { getOAuthTokens } from '../../lib/storage/oauth-cache.js';
 
 function normalizeClientLines(lines: unknown[]): PriceLineInput[] {
   return lines.map((line) => {
@@ -87,6 +88,15 @@ addDiscountedRouter.post('/', async (req, res) => {
     if (!rule || rule.status !== 'ACTIVE') return failResponse(res, req, 'Rule not found', 404);
 
     const normalized = expandLinesForRule(rule, normalizeClientLines(lines));
+
+    const privateOAuth = await getOAuthTokens(storeId);
+    if (rule.ruleType === 'FIXED_BUNDLE' && privateOAuth?.accessToken) {
+      const componentIds = parseBundleItems(rule.items).components.map((c) => c.productId);
+      await ensureNameYourPriceEnabled(
+        { storeId, accessToken: privateOAuth.accessToken, publicToken: tokens.publicToken },
+        componentIds,
+      );
+    }
 
     const priced = await priceLinesForRule(tokens, rule, normalized);
     const result = await addToCart(
