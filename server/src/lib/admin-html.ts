@@ -30,7 +30,7 @@ export function buildEcwidAdminHtml(
 <script>
 (function(){${bootstrapJs}${authErrorJs}
 var u=new URL(location.href);u.searchParams.delete('payload');u.searchParams.delete('bootstrap');
-history.replaceState({},'',u.pathname+(u.search||''));})();
+history.replaceState({},'',u.pathname+(u.search||''));if(location.hash){history.replaceState({},'',location.pathname+location.search);}})();
 </script>
 <script src="${ECWID_SDK_URL}"></script>
 <script>

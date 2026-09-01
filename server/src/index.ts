@@ -1,5 +1,4 @@
 import path from 'node:path';
-import fs from 'node:fs';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -27,10 +26,6 @@ loadEnvFiles();
 const manifest = getManifest();
 const adminDist = getAdminDistPath();
 const storefrontDist = getStorefrontDistPath();
-
-// #region agent log
-fetch('http://127.0.0.1:7627/ingest/17a22ea5-cb1e-474a-bba3-194752c05bb0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c36960'},body:JSON.stringify({sessionId:'c36960',location:'server/src/index.ts:static-paths',message:'Resolved static asset paths',data:{cwd:process.cwd(),vercel:!!process.env.VERCEL,adminDist,storefrontDist,adminExists:fs.existsSync(adminDist),storefrontExists:fs.existsSync(storefrontDist)},timestamp:Date.now(),hypothesisId:'G',runId:'post-fix'})}).catch(()=>{});
-// #endregion
 
 const app = express();
 const port = getPort();
@@ -88,9 +83,6 @@ async function serveAdminEntry(
       const storeId = String(decoded.store_id);
       await persistStoreAuth(storeId, decoded.access_token, decoded.public_token);
       const sessionToken = setSession(res, storeId, decoded.access_token);
-      // #region agent log
-      fetch('http://127.0.0.1:7627/ingest/17a22ea5-cb1e-474a-bba3-194752c05bb0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c36960'},body:JSON.stringify({sessionId:'c36960',location:'server/src/index.ts:admin-entry',message:'Ecwid payload decrypted; serving 200 with EcwidApp.init injection',data:{storeId,lang:decoded.lang,inIframe:req.headers['sec-fetch-dest']==='iframe',payloadLen:encrypted.length,secretLen:clientSecret.length},timestamp:Date.now(),hypothesisId:'N',runId:'post-fix-3'})}).catch(()=>{});
-      // #endregion
       res
         .status(200)
         .type('html')
@@ -99,9 +91,6 @@ async function serveAdminEntry(
     } catch (err) {
       const reason = describeEcwidPayloadDecryptError(err);
       console.error('Ecwid iframe payload auth failed', reason, err);
-      // #region agent log
-      fetch('http://127.0.0.1:7627/ingest/17a22ea5-cb1e-474a-bba3-194752c05bb0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c36960'},body:JSON.stringify({sessionId:'c36960',location:'server/src/index.ts:admin-entry-fail',message:'Ecwid payload decrypt failed',data:{reason,payloadLen:encrypted.length,secretLen:getEcwidClientSecret().length,inIframe:req.headers['sec-fetch-dest']==='iframe'},timestamp:Date.now(),hypothesisId:'N',runId:'post-fix-3'})}).catch(()=>{});
-      // #endregion
       // Still return 200 + EcwidApp.init so Ecwid CP does not show "extension cannot be loaded".
       res
         .status(200)

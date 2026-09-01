@@ -24,9 +24,6 @@ rulesRouter.get('/', async (req, res) => {
   try {
     const storeId = req.session!.storeId!;
     const token = sessionToken(req);
-    // #region agent log
-    fetch('http://127.0.0.1:7627/ingest/17a22ea5-cb1e-474a-bba3-194752c05bb0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c36960'},body:JSON.stringify({sessionId:'c36960',location:'routes/dashboard/rules.ts:GET/',message:'Listing rules',data:{storeId,hasSessionToken:!!token},timestamp:Date.now(),hypothesisId:'H',runId:'post-fix'})}).catch(()=>{});
-    // #endregion
     const rules = await listBundleRules(storeId, token);
     jsonResponse(res, req, { rules });
   } catch (err) {

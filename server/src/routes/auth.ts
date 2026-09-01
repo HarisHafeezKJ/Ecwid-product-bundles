@@ -66,10 +66,6 @@ authRouter.post('/ecwid-payload', async (req, res) => {
     await persistStoreAuth(storeId, accessToken, decoded.public_token);
     const sessionToken = setSession(res, storeId, accessToken);
 
-    // #region agent log
-    fetch('http://127.0.0.1:7627/ingest/17a22ea5-cb1e-474a-bba3-194752c05bb0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c36960'},body:JSON.stringify({sessionId:'c36960',location:'auth.ts:ecwid-payload',message:'Ecwid iframe payload authenticated',data:{storeId,lang:decoded.lang},timestamp:Date.now(),hypothesisId:'J',runId:'post-fix'})}).catch(()=>{});
-    // #endregion
-
     jsonResponse(res, req, {
       ok: true,
       storeId,

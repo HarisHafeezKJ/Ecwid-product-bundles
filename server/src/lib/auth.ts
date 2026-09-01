@@ -101,9 +101,6 @@ export function sessionMiddleware(req: Request, _res: Response, next: NextFuncti
 
   if (req.session.storeId && req.session.accessToken) {
     hydrateOAuthCache(req.session.storeId, req.session.accessToken);
-    // #region agent log
-    fetch('http://127.0.0.1:7627/ingest/17a22ea5-cb1e-474a-bba3-194752c05bb0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c36960'},body:JSON.stringify({sessionId:'c36960',location:'auth.ts:sessionMiddleware',message:'Session resolved',data:{storeId:req.session.storeId,source:fromCookie?'cookie':fromBearer?'bearer':'none',secFetchSite:req.headers['sec-fetch-site']},timestamp:Date.now(),hypothesisId:'I',runId:'post-fix'})}).catch(()=>{});
-    // #endregion
   }
   next();
 }
