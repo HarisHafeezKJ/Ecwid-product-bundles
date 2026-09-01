@@ -1,6 +1,25 @@
 .pb-product-bundles {
   margin: 1.25rem 0;
   font-family: inherit;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  clear: both;
+}
+
+.pb-product-bundles *,
+.pb-product-bundles *::before,
+.pb-product-bundles *::after {
+  box-sizing: border-box;
+}
+
+.pb-product-bundles h3,
+.pb-product-bundles h4 {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .pb-loading {
@@ -17,6 +36,8 @@
   border-radius: 12px;
   padding: 1rem;
   background: var(--pb-offer-card-bg, #fff);
+  max-width: 100%;
+  width: 100%;
 }
 
 .pb-widget__title {
@@ -52,6 +73,12 @@
   font-size: var(--pb-add-to-cart-size, 15px);
   font-weight: 600;
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  text-transform: none;
+  letter-spacing: normal;
+  line-height: 1.25;
+  font-family: inherit;
 }
 
 .pb-btn:disabled {
