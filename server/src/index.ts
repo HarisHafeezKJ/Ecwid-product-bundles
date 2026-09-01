@@ -21,6 +21,7 @@ import { addDiscountedRouter } from './routes/storefront/add-discounted.js';
 import { cartUpsellRouter } from './routes/storefront/cart-upsell.js';
 import { syncVolumeCartRouter } from './routes/storefront/sync-volume-cart.js';
 import { ordersWebhookRouter } from './routes/webhooks/orders.js';
+import { discountWebhookRouter } from './routes/webhooks/discount.js';
 
 loadEnvFiles();
 
@@ -73,6 +74,7 @@ app.use('/api/storefront/add-discounted', addDiscountedRouter);
 app.use('/api/storefront/cart-upsell', cartUpsellRouter);
 app.use('/api/storefront/sync-volume-cart', syncVolumeCartRouter);
 app.use('/api/webhooks/orders', ordersWebhookRouter);
+app.use('/api/webhooks/discount', discountWebhookRouter);
 
 const adminDistPath = adminDist;
 

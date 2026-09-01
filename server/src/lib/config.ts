@@ -16,6 +16,7 @@ export interface AppManifest {
     oauthCallback: string;
     oauthInstall: string;
     webhook: string;
+    discountWebhook: string;
     storefrontScript: string;
     storefrontApi: string;
     dashboardApi: string;

@@ -73,6 +73,8 @@ export async function addDiscountedAndRefresh(
 
   if (result.serverAdded) {
     await refreshCart();
+    await new Promise((resolve) => window.setTimeout(resolve, 400));
+    await refreshCart();
     return;
   }
 
@@ -86,6 +88,9 @@ export async function addDiscountedAndRefresh(
   }
 
   await addEcwidLines(ecwidLines);
+  await refreshCart();
+  // Second refresh helps Ecwid pick up server-calculated bundle discounts (discountUrl).
+  await new Promise((resolve) => window.setTimeout(resolve, 400));
   await refreshCart();
 }
 
@@ -143,13 +148,11 @@ async function addEcwidLineWithFallbacks(
 ): Promise<boolean> {
   const variantOptions = stripStampOptions(line.options);
   const attempts: EcwidCartLinePayload[] = [
+    { ...line, options: variantOptions },
     { ...line, options: variantOptions, selectedPrice: undefined },
     { ...line, options: undefined, selectedPrice: undefined },
+    { ...line, options: undefined },
   ];
-  if (variantOptions) {
-    attempts.push({ ...line, options: variantOptions });
-  }
-  attempts.push({ ...line, options: undefined });
 
   for (const attempt of attempts) {
     if (await tryAddEcwidLine(cartApi, attempt)) return true;

@@ -115,6 +115,7 @@ authRouter.get('/manifest', (req, res) => {
       storefrontScript: `${baseUrl}${manifest.paths.storefrontScript}`,
       storefrontApi: `${baseUrl}${manifest.paths.storefrontApi}`,
       webhook: `${baseUrl}${manifest.paths.webhook}`,
+      discountWebhook: `${baseUrl}${manifest.paths.discountWebhook}`,
     },
   });
 });
