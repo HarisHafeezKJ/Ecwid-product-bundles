@@ -107,12 +107,21 @@ async function priceFixedBundle(
     if (!bundleProductIds.has(line.productId)) throw new Error('Bundle is not available');
   }
 
+  const qtyByProduct = new Map<string, number>();
+  for (const line of lines) {
+    const qty = Math.max(1, line.quantity);
+    qtyByProduct.set(line.productId, (qtyByProduct.get(line.productId) ?? 0) + qty);
+  }
+  for (const item of items) {
+    const totalQty = qtyByProduct.get(item.productId) ?? 0;
+    const minQty = item.minQuantity ?? 1;
+    if (totalQty < minQty) throw new Error('Bundle is not available');
+  }
+
   const priced: PricedLine[] = [];
   for (const line of lines) {
     const item = items.find((i) => i.productId === line.productId);
     const qty = Math.max(1, line.quantity);
-    const minQty = item?.minQuantity ?? 1;
-    if (qty < minQty) throw new Error('Bundle is not available');
 
     const variantId =
       line.variantId ?? (item?.adminLocksVariant ? item.defaultVariantId : undefined);
