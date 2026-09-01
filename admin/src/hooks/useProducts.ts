@@ -2,21 +2,41 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CatalogProduct } from '@pb/shared';
 import * as api from '../api/client';
 
-export function useProducts(initialQuery = '') {
+export interface ProductSearchState {
+  query: string;
+  setQuery: (query: string) => void;
+  products: CatalogProduct[];
+  loading: boolean;
+  error: string | null;
+  search: (term: string) => Promise<void>;
+}
+
+export function useProducts(initialQuery = ''): ProductSearchState {
   const [query, setQuery] = useState(initialQuery);
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>();
+  const abortRef = useRef<AbortController | null>(null);
 
   const search = useCallback(async (term: string) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
+    setError(null);
     try {
-      const results = await api.searchProducts(term);
+      const results = await api.searchProducts(term, 24, controller.signal);
+      if (controller.signal.aborted) return;
       setProducts(results);
-    } catch {
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       setProducts([]);
+      setError(err instanceof Error ? err.message : 'Could not search products.');
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
   }, []);
 
@@ -28,7 +48,9 @@ export function useProducts(initialQuery = '') {
     return () => clearTimeout(timer.current);
   }, [query, search]);
 
-  return { query, setQuery, products, loading, search };
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  return { query, setQuery, products, loading, error, search };
 }
 
 export function useProductMap(productIds: string[]) {

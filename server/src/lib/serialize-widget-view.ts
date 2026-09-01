@@ -1,4 +1,9 @@
-import type { BundleRule, CatalogProduct, StorefrontWidgetView } from '@pb/shared';
+import type { BundleRule, CatalogProduct, StorefrontWidgetView, WidgetStyle } from '@pb/shared';
+import type {
+  SerializedStorefrontWidgetView,
+  SerializedVolumeTierView,
+  SerializedWidgetProductItem,
+} from '@pb/shared';
 import {
   bundleLineSale,
   exactVolumeUnitPrice,
@@ -6,58 +11,11 @@ import {
   volumeUnitPrice,
 } from '@pb/shared';
 
-/** JSON shape consumed by storefront `pb-bundles.js`. */
-export interface SerializedStorefrontWidgetView {
-  ruleId: string;
-  ruleType: BundleRule['ruleType'];
-  overViewLimit?: boolean;
-  status?: string;
-  layout?: BundleRule['layout'];
-  allowVariantChoice?: boolean;
-  chooseVariationPerItem?: boolean;
-  mixRequiredCount?: number;
-  widgetStyle: BundleRule['widgetStyle'];
-  items: SerializedWidgetProductItem[];
-  volumeTiers?: SerializedVolumeTierView[];
-  discounted?: number;
-  original?: number;
-  savings?: number;
-  mixDiscounted?: number;
-  mixOriginal?: number;
-  mixSavings?: number;
-  currency?: string;
-  targetProductId?: string;
-}
-
-export interface SerializedWidgetProductItem {
-  productId: string;
-  name: string;
-  imageUrl?: string;
-  minQuantity: number;
-  price: number;
-  discountedPrice?: number;
-  originalPrice?: number;
-  sku?: string;
-  isPrimary?: boolean;
-  inStock?: boolean;
-  defaultVariantId?: string;
-  adminLocksVariant?: boolean;
-  chooseVariationPerItem?: boolean;
-  variants?: { id: string; label: string; inStock: boolean; price?: number }[];
-}
-
-export interface SerializedVolumeTierView {
-  qty: number;
-  title?: string;
-  discountType?: string;
-  discountValue?: number;
-  imageUrl?: string;
-  imageRadius?: number;
-  imageSize?: number;
-  unitPrice?: number;
-  discountedUnitPrice?: number;
-  savings?: number;
-}
+export type {
+  SerializedStorefrontWidgetView,
+  SerializedVolumeTierView,
+  SerializedWidgetProductItem,
+};
 
 function variantUnitPrice(product: CatalogProduct, variantId?: string): number {
   if (variantId && product.variants?.length) {
@@ -67,7 +25,7 @@ function variantUnitPrice(product: CatalogProduct, variantId?: string): number {
   return product.price;
 }
 
-function mapVariants(product: CatalogProduct): SerializedWidgetProductItem['variants'] {
+export function mapVariants(product: CatalogProduct): SerializedWidgetProductItem['variants'] {
   return (product.variants ?? []).map((variant) => ({
     id: variant.id,
     label: Object.values(variant.options ?? {})
@@ -152,12 +110,38 @@ function mapVolumeTiers(rule: BundleRule, unitPrice: number): SerializedVolumeTi
   });
 }
 
+/** Map admin/shared widget style keys to storefront field names. */
+export function normalizeWidgetStyleForStorefront(style: WidgetStyle | undefined): WidgetStyle {
+  const s = { ...(style ?? {}) } as Record<string, string | number | boolean | undefined>;
+
+  const alias = (from: string, to: string) => {
+    if (s[from] != null && s[to] == null) s[to] = s[from];
+  };
+
+  alias('offerCardSelectedBg', 'offerSelectedBg');
+  alias('offerCardSelectedBorder', 'offerSelectedBorder');
+  alias('buyAllColor', 'buyAllAtColor');
+  alias('buyAllSize', 'buyAllAtSize');
+  alias('buyAllPriceColor', 'buyAllAtPriceColor');
+  alias('buyAllPriceSize', 'buyAllAtPriceSize');
+  alias('buyAllTagColor', 'buyAllAtTagColor');
+  alias('buyAllTagSize', 'buyAllAtTagSize');
+  alias('variationColor', 'variantSelectColor');
+  alias('qtyPromptText', 'mixCtaSelectMore');
+  alias('addToCartText', 'mixCtaAdd');
+
+  const divider = s.productDivider ?? s.dividerStyle;
+  if (divider != null && s.divider == null) s.divider = divider;
+
+  return s as WidgetStyle;
+}
+
 export function serializeWidgetView(
   view: StorefrontWidgetView,
   currency = 'USD',
 ): SerializedStorefrontWidgetView {
   const { rule, products, original, discounted, savings, overViewLimit, mixRequiredCount } = view;
-  const widgetStyle = rule.widgetStyle ?? {};
+  const widgetStyle = normalizeWidgetStyleForStorefront(rule.widgetStyle ?? {});
   const targetProductId = rule.targetProductId ?? rule.primaryProductId;
 
   const base: SerializedStorefrontWidgetView = {
@@ -204,15 +188,21 @@ export function serializeWidgetView(
       };
     }
 
-    case 'MIX_AND_MATCH':
+    case 'MIX_AND_MATCH': {
+      const avgUnit =
+        products.length > 0
+          ? products.reduce((sum, product) => sum + product.price, 0) / products.length
+          : 0;
       return {
         ...base,
         items: mapPoolItems(rule, products).map((item) => ({ ...item, minQuantity: 0 })),
+        volumeTiers: mapVolumeTiers(rule, avgUnit),
         mixRequiredCount,
         mixDiscounted: discounted,
         mixOriginal: original,
         mixSavings: savings,
       };
+    }
 
     default:
       return base;

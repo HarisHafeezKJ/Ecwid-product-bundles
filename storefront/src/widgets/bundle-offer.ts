@@ -7,10 +7,13 @@ import {
   createShellState,
   mountWidgetShell,
   setAddingState,
+  showAtcSuccess,
   showWidgetError,
+  clearWidgetError,
+  validateWidgetBeforeAtc,
   type WidgetShellState,
 } from './widget-shell';
-import { qs } from '../utils';
+import { asCopyText, qs } from '../utils';
 
 export function renderBundleOffer(container: HTMLElement, view: StorefrontWidgetView): void {
   const state = createShellState(view);
@@ -27,25 +30,31 @@ function bindBundleOffer(root: HTMLElement, state: WidgetShellState): void {
 
 async function handleBundleAtc(root: HTMLElement, state: WidgetShellState): Promise<void> {
   if (state.adding) return;
-  const errEl = qs<HTMLElement>(root, '[data-pb-error]');
-  if (errEl) {
-    errEl.hidden = true;
-    errEl.textContent = '';
+  clearWidgetError(root);
+  const lines = collectBundleLines(state.view, state.variantSelections);
+  const validationError = validateWidgetBeforeAtc(state, lines);
+  if (validationError) {
+    showWidgetError(root, validationError);
+    return;
   }
+
   state.adding = true;
   setAddingState(root, true, state.view);
   try {
-    const lines = collectBundleLines(state.view, state.variantSelections);
     await addDiscountedAndRefresh(state.view.ruleId, lines);
+    showAtcSuccess(root, state);
   } catch (err) {
     const msg =
       err instanceof Error
         ? err.message
-        : state.view.widgetStyle.addToCartErrorText ?? 'Could not add to cart.';
+        : asCopyText(state.view.widgetStyle.addToCartErrorText, 'Could not add to cart.');
     showWidgetError(root, msg);
   } finally {
     state.adding = false;
-    setAddingState(root, false, state.view);
+    const btn = root.querySelector<HTMLButtonElement>('[data-pb-atc]');
+    if (btn && !btn.classList.contains('pb-btn--success')) {
+      setAddingState(root, false, state.view);
+    }
   }
 }
 

@@ -1,3 +1,18 @@
+export function asCopyText(
+  value: string | number | boolean | undefined,
+  fallback: string,
+): string {
+  if (typeof value === 'string' && value.trim()) return value;
+  return fallback;
+}
+
+export function optionalCopyText(
+  value: string | number | boolean | undefined,
+): string | undefined {
+  if (typeof value === 'string' && value.trim()) return value;
+  return undefined;
+}
+
 export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -7,19 +22,7 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-export function formatMoney(amount: number | undefined, currency = 'USD'): string {
-  if (amount == null || Number.isNaN(amount)) return '';
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
-  } catch {
-    return `$${amount.toFixed(2)}`;
-  }
-}
+export { formatMoney } from '@pb/shared';
 
 export function slugFromPath(pathname = window.location.pathname): string {
   const parts = pathname.split('/').filter(Boolean);

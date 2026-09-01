@@ -1,9 +1,9 @@
-import type { StorefrontWidgetView, WidgetProductItem } from '../types';
+import type { StorefrontWidgetView, VariantOption, WidgetProductItem } from '../types';
 import { addDiscounted } from '../api';
 import { cartIdFrom, getCart, refreshCart } from '../ecwid';
 import { getEcwid } from '../ecwid';
-import type { EcwidCartLinePayload, EcwidAddProductPayload, PricedLineResponse } from '../types';
-import { qs, withTimeout } from '../utils';
+import type { EcwidCart, EcwidCartLinePayload, EcwidAddProductPayload, PricedLineResponse } from '../types';
+import { qs, withTimeout, asCopyText } from '../utils';
 import { applyWidgetStyle, mirrorNativeAtcTheme } from './widget-style-css';
 
 const PB_STAMP_KEYS = new Set(['pbOfferId', 'pbDealId', 'pbKind']);
@@ -162,11 +162,27 @@ async function addEcwidLineWithFallbacks(
   return false;
 }
 
-function productQtyInCart(cart: Awaited<ReturnType<typeof getCart>>, productId: number): number {
+function cartItemMatchesLine(
+  item: NonNullable<EcwidCart['items']>[number],
+  productId: number,
+  options?: Record<string, string>,
+): boolean {
+  const id = item.product?.id ?? item.productId;
+  if (Number(id) !== productId) return false;
+  if (!options || Object.keys(options).length === 0) return true;
+
+  const itemOptions = item.options ?? item.selectedOptions ?? {};
+  return Object.entries(options).every(([key, value]) => itemOptions[key] === value);
+}
+
+function lineQtyInCart(
+  cart: EcwidCart | null,
+  productId: number,
+  options?: Record<string, string>,
+): number {
   if (!cart?.items?.length) return 0;
   return cart.items.reduce((sum, item) => {
-    const id = item.product?.id ?? item.productId;
-    if (Number(id) !== productId) return sum;
+    if (!cartItemMatchesLine(item, productId, options)) return sum;
     return sum + Math.max(0, Number(item.quantity ?? 0));
   }, 0);
 }
@@ -176,9 +192,10 @@ async function tryAddEcwidLine(
   line: EcwidCartLinePayload,
 ): Promise<boolean> {
   const payload = toEcwidAddPayload(line);
-  const qtyBefore = productQtyInCart(await getCart(), payload.id);
+  const variantOptions = stripStampOptions(line.options);
+  const qtyBefore = lineQtyInCart(await getCart(), payload.id, variantOptions);
 
-  void withTimeout(
+  await withTimeout(
     new Promise<void>((resolve) => {
       cartApi.addProduct!(payload, (success, _product, _cart, error) => {
         if (!success) {
@@ -195,7 +212,7 @@ async function tryAddEcwidLine(
   await new Promise((resolve) => window.setTimeout(resolve, 500));
   await refreshCart();
 
-  const qtyAfter = productQtyInCart(await getCart(), payload.id);
+  const qtyAfter = lineQtyInCart(await getCart(), payload.id, variantOptions);
   return qtyAfter >= qtyBefore + payload.quantity;
 }
 
@@ -209,7 +226,92 @@ export function showWidgetError(root: HTMLElement, message: string): void {
   if (btn) {
     btn.hidden = false;
     btn.style.visibility = 'visible';
+    btn.classList.remove('pb-btn--success');
   }
+  // The error element already carries role="alert"; also writing to the polite live
+  // region would make screen readers announce the same message twice.
+}
+
+export function clearWidgetError(root: HTMLElement): void {
+  const err = qs<HTMLElement>(root, '[data-pb-error]');
+  if (err) {
+    err.hidden = true;
+    err.textContent = '';
+  }
+}
+
+export function announceAtcStatus(root: HTMLElement, message: string): void {
+  const live = qs<HTMLElement>(root, '[data-pb-atc-status]');
+  if (!live) return;
+  live.textContent = '';
+  window.setTimeout(() => {
+    live.textContent = message;
+  }, 50);
+}
+
+export function showAtcSuccess(root: HTMLElement, state: WidgetShellState): void {
+  clearWidgetError(root);
+  const btn = qs<HTMLButtonElement>(root, '[data-pb-atc]');
+  if (!btn) return;
+  const successText = asCopyText(state.view.widgetStyle.addedToCartText, 'Added to cart');
+  btn.classList.add('pb-btn--success');
+  btn.disabled = false;
+  btn.textContent = successText;
+  announceAtcStatus(root, successText);
+  window.setTimeout(() => {
+    btn.classList.remove('pb-btn--success');
+    setAddingState(root, false, state.view);
+  }, 2500);
+}
+
+function findVariant(item: WidgetProductItem, variantId: string | undefined): VariantOption | undefined {
+  const variants = item.variants ?? [];
+  if (variants.length <= 1) return variants[0];
+  if (!variantId) return undefined;
+  return variants.find((v) => v.id === variantId);
+}
+
+function validateLineStock(
+  view: StorefrontWidgetView,
+  productId: string,
+  variantId?: string,
+): string | null {
+  const style = view.widgetStyle;
+  const item = view.items.find((row) => row.productId === productId);
+  if (!item) return null;
+
+  if (item.inStock === false) {
+    return asCopyText(style.outOfStockText, 'This product is out of stock.');
+  }
+
+  const hasVariants = (item.variants?.length ?? 0) > 1;
+  if (hasVariants && !variantId) {
+    return asCopyText(style.unavailableOptionText, 'Please select an option.');
+  }
+
+  const variant = hasVariants ? findVariant(item, variantId) : item.variants?.[0];
+  if (variant && !variant.inStock) {
+    return asCopyText(style.outOfStockText, 'Selected option is out of stock.');
+  }
+
+  return null;
+}
+
+export function validateWidgetBeforeAtc(
+  state: WidgetShellState,
+  lines: { productId: string; quantity: number; variantId?: string }[],
+): string | null {
+  if (!lines.length) {
+    return asCopyText(state.view.widgetStyle.addToCartErrorText, 'Could not add to cart.');
+  }
+
+  for (const line of lines) {
+    if (line.quantity <= 0) continue;
+    const error = validateLineStock(state.view, line.productId, line.variantId);
+    if (error) return error;
+  }
+
+  return null;
 }
 
 export function setAddingState(root: HTMLElement, adding: boolean, view: StorefrontWidgetView): void {
@@ -217,8 +319,8 @@ export function setAddingState(root: HTMLElement, adding: boolean, view: Storefr
   if (!btn) return;
   btn.disabled = adding;
   btn.textContent = adding
-    ? view.widgetStyle.addingToCartText ?? 'Adding...'
-    : view.widgetStyle.addToCartText ?? 'Add to cart';
+    ? asCopyText(view.widgetStyle.addingToCartText, 'Adding...')
+    : asCopyText(view.widgetStyle.addToCartText, 'Add to cart');
 }
 
 export function collectBundleLines(

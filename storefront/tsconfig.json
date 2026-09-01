@@ -9,7 +9,10 @@
     "noEmit": true,
     "isolatedModules": true,
     "resolveJsonModule": true,
-    "useDefineForClassFields": true
+    "useDefineForClassFields": true,
+    "paths": {
+      "@pb/shared": ["../packages/shared/src/index.ts"]
+    }
   },
   "include": ["src"]
 }

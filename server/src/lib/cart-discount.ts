@@ -9,6 +9,7 @@ import {
   isTierDiscountable,
   mixMatchCartQty,
   mixPoolProductIds,
+  uniqueVolumeRuleForProduct,
   volumeUnitPrice,
 } from '@pb/shared';
 
@@ -206,6 +207,33 @@ function productsInEligibleFixedBundle(
   return covered;
 }
 
+/** Assign each cart product to at most one volume rule (ambiguous overlaps apply none). */
+function volumeDiscountsForLines(
+  volumeRules: BundleRule[],
+  items: EcwidDiscountCartItem[],
+  lines: CartQtyLine[],
+): EcwidCartDiscount[] {
+  const discounts: EcwidCartDiscount[] = [];
+  const linesByRule = new Map<string, CartQtyLine[]>();
+
+  for (const line of lines) {
+    const rule = uniqueVolumeRuleForProduct(volumeRules, line.productId);
+    if (!rule) continue;
+    const bucket = linesByRule.get(rule.id) ?? [];
+    bucket.push(line);
+    linesByRule.set(rule.id, bucket);
+  }
+
+  for (const rule of volumeRules) {
+    const ruleLines = linesByRule.get(rule.id);
+    if (!ruleLines?.length) continue;
+    const discount = volumeDiscountForRule(rule, items, ruleLines);
+    if (discount) discounts.push(discount);
+  }
+
+  return discounts;
+}
+
 /** Ecwid discountUrl handler — returns cart-level discounts for eligible bundle rules. */
 export function calculateCartDiscounts(
   rules: BundleRule[],
@@ -217,6 +245,8 @@ export function calculateCartDiscounts(
   const active = rules.filter((r) => r.status === 'ACTIVE' && r.ruleType !== 'CART_UPSELL');
   const discounts: EcwidCartDiscount[] = [];
   const fixedBundleProducts = productsInEligibleFixedBundle(active, lines);
+  const volumeRules = active.filter((r) => r.ruleType === 'VOLUME_DISCOUNT');
+  const volumeLines = lines.filter((line) => !fixedBundleProducts.has(line.productId));
 
   for (const rule of active) {
     if (rule.ruleType === 'FIXED_BUNDLE') {
@@ -225,18 +255,14 @@ export function calculateCartDiscounts(
       continue;
     }
 
-    if (rule.ruleType === 'VOLUME_DISCOUNT') {
-      const filteredLines = lines.filter((line) => !fixedBundleProducts.has(line.productId));
-      const discount = volumeDiscountForRule(rule, items, filteredLines);
-      if (discount) discounts.push(discount);
-      continue;
-    }
-
     if (rule.ruleType === 'MIX_AND_MATCH') {
-      const discount = mixMatchDiscount(rule, items, lines);
+      const filteredLines = lines.filter((line) => !fixedBundleProducts.has(line.productId));
+      const discount = mixMatchDiscount(rule, items, filteredLines);
       if (discount) discounts.push(discount);
     }
   }
+
+  discounts.push(...volumeDiscountsForLines(volumeRules, items, volumeLines));
 
   return { discounts };
 }

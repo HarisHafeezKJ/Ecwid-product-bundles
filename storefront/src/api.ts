@@ -6,7 +6,7 @@ import type {
   OfferResponse,
   RuleType,
 } from './types';
-import { getEmbeddedPublicConfig, getPublicToken, getStoreId } from './ecwid';
+import { getPublicToken, getStoreId } from './ecwid';
 import { apiBaseFromScript, findOwnScript } from './script-config';
 
 let apiBaseUrl = '';
@@ -61,7 +61,6 @@ export async function fetchOffer(params: {
 }): Promise<OfferResponse | null> {
   const storeId = getStoreId();
   const publicToken = await getPublicToken();
-  const publicConfig = getEmbeddedPublicConfig();
   const res = await fetch(storefrontUrl('/offer'), {
     method: 'POST',
     credentials: 'include',
@@ -75,7 +74,6 @@ export async function fetchOffer(params: {
       ruleId: params.ruleId,
       storeId,
       publicToken: publicToken ?? undefined,
-      publicConfig: publicConfig ?? undefined,
     }),
   });
   return parseJson<OfferResponse>(res);
@@ -84,7 +82,6 @@ export async function fetchOffer(params: {
 export async function addDiscounted(body: AddDiscountedRequest): Promise<AddDiscountedResponse> {
   const storeId = getStoreId();
   const publicToken = await getPublicToken();
-  const publicConfig = getEmbeddedPublicConfig();
   const res = await fetch(storefrontUrl('/add-discounted'), {
     method: 'POST',
     credentials: 'include',
@@ -96,7 +93,6 @@ export async function addDiscounted(body: AddDiscountedRequest): Promise<AddDisc
       ...body,
       storeId,
       publicToken: publicToken ?? undefined,
-      publicConfig: publicConfig ?? undefined,
     }),
   });
   if (!res.ok) {
@@ -104,7 +100,10 @@ export async function addDiscounted(body: AddDiscountedRequest): Promise<AddDisc
     throw new Error(parseApiError(text, res.status));
   }
   const data = (await res.json()) as AddDiscountedResponse;
-  if (!data?.ok) throw new Error('Could not add to cart.');
+  if (!data?.ok && !data?.lines?.length && !data?.ecwidLines?.length) {
+    const detail = data?.failedLines?.[0]?.error;
+    throw new Error(detail || 'Could not add to cart.');
+  }
   return data;
 }
 
@@ -128,7 +127,6 @@ export async function syncVolumeCart(
 
   const storeId = getStoreId();
   const publicToken = await getPublicToken();
-  const publicConfig = getEmbeddedPublicConfig();
   const res = await fetch(storefrontUrl('/sync-volume-cart'), {
     method: 'POST',
     credentials: 'include',
@@ -141,7 +139,6 @@ export async function syncVolumeCart(
       storeId,
       lines,
       publicToken: publicToken ?? undefined,
-      publicConfig: publicConfig ?? undefined,
     }),
   });
   if (!res.ok) return { ok: false, updated: 0 };

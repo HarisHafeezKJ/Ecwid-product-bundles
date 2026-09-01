@@ -1,12 +1,15 @@
 import { randomUUID } from 'node:crypto';
-import type { BundleRule, RuleType, RuleStatus } from '@pb/shared';
+import type { BundleRule, RuleType, RuleStatus, RuleFormInput } from '@pb/shared';
 import {
   clampDiscountValue,
+  clampRuleDiscountInput,
   inferApplyToAllProducts,
   parseBundleItems,
   parseVolumeTiers,
   defaultWidgetStyle,
+  validateRuleForm,
 } from '@pb/shared';
+import { ClientError } from '../api-response.js';
 import { resolveStoreTokens } from '../storage/oauth-cache.js';
 import {
   readPublicConfig,
@@ -16,6 +19,7 @@ import {
   writeStorageJson,
 } from '../storage/ecwid-storage.js';
 import { mapStoredRule, ruleInputFromBody, type StoredRuleRow, type StoredRulesDoc } from './mappers.js';
+import { serializeRulesForPublicConfig } from './public-rules.js';
 
 const EMPTY_IDS: string[] = [];
 
@@ -45,9 +49,12 @@ async function syncRulesToPublicConfig(
   const tokens = await resolveStoreTokens(storeId, sessionAccessToken);
   const doc = await loadRulesDoc(storeId, sessionAccessToken);
   const existing = (await readPublicConfig(tokens)) ?? {};
+  const activeRules = doc.rules
+    .filter((row) => row.status === 'ACTIVE')
+    .map(mapStoredRule);
   await writePublicConfig(tokens, {
     ...existing,
-    rules: doc.rules.filter((row) => row.status === 'ACTIVE'),
+    rules: serializeRulesForPublicConfig(activeRules),
     rulesUpdatedAt: new Date().toISOString(),
   });
 }
@@ -107,12 +114,10 @@ export async function saveBundleRule(
   sessionAccessToken?: string,
 ): Promise<BundleRule> {
   const partial = ruleInputFromBody(input, storeId);
-  if (!partial.title?.trim()) throw new Error('Enter a title.');
-  if (!partial.ruleType) throw new Error('Invalid ruleType');
+  if (!partial.title?.trim()) throw new ClientError('Enter a title.');
+  if (!partial.ruleType) throw new ClientError('Invalid ruleType');
 
   const ruleType = partial.ruleType;
-  let discountType = partial.discountType ?? 'NONE';
-  let discountValue = clampDiscountValue(discountType, partial.discountValue ?? 0);
   const items = parseBundleItems(partial.items);
   const tiers = parseVolumeTiers(partial.volumeTiers);
   const applyToAllProducts = inferApplyToAllProducts({
@@ -120,6 +125,25 @@ export async function saveBundleRule(
     displayOn: partial.displayOn,
     primaryProductId: partial.primaryProductId,
   });
+
+  const validation = validateRuleForm(
+    clampRuleDiscountInput({
+      ...partial,
+      title: partial.title.trim(),
+      ruleType,
+      items,
+      volumeTiers: { tiers },
+      applyToAllProducts,
+      triggerProductIds: partial.triggerProductIds ?? EMPTY_IDS,
+      suggestedProductIds: partial.suggestedProductIds ?? EMPTY_IDS,
+    } as RuleFormInput),
+  );
+  if (!validation.valid) {
+    throw new ClientError(validation.errors[0] ?? 'Invalid rule.');
+  }
+
+  let discountType = partial.discountType ?? 'NONE';
+  let discountValue = clampDiscountValue(discountType, partial.discountValue ?? 0);
 
   let allowVariantChoice = partial.allowVariantChoice ?? true;
   if (ruleType === 'CART_UPSELL') {

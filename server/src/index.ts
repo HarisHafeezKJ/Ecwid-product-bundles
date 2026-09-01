@@ -2,6 +2,7 @@ import path from 'node:path';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import { rateLimit } from './lib/rate-limit.js';
 import { corsHeaders, isAllowedOrigin, jsonResponse } from './lib/api-response.js';
 import { getAdminDistPath, getEcwidClientSecret, getManifest, getPort, getStorefrontDistPath, loadEnvFiles } from './lib/config.js';
 import { sessionMiddleware, persistStoreAuth, setSession } from './lib/auth.js';
@@ -50,7 +51,12 @@ app.use('/admin/assets', express.static(path.join(adminDist, 'assets')));
 app.use(apiCors);
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
-app.use(sessionMiddleware);
+app.use((req, res, next) => {
+  void sessionMiddleware(req, res, next);
+});
+
+const storefrontRateLimit = rateLimit({ windowMs: 60_000, max: 120 });
+const webhookRateLimit = rateLimit({ windowMs: 60_000, max: 300 });
 
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') {
@@ -68,11 +74,13 @@ app.use('/api/auth', authRouter);
 app.use('/api/dashboard/rules', rulesRouter);
 app.use('/api/dashboard/settings', settingsRouter);
 app.use('/api/dashboard/products', productsRouter);
+app.use('/api/storefront', storefrontRateLimit);
 app.use('/api/storefront/offer', offerRouter);
 app.use('/api/storefront/config', storefrontConfigRouter);
 app.use('/api/storefront/add-discounted', addDiscountedRouter);
 app.use('/api/storefront/cart-upsell', cartUpsellRouter);
 app.use('/api/storefront/sync-volume-cart', syncVolumeCartRouter);
+app.use('/api/webhooks', webhookRateLimit);
 app.use('/api/webhooks/orders', ordersWebhookRouter);
 app.use('/api/webhooks/discount', discountWebhookRouter);
 

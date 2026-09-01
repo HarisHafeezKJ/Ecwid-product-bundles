@@ -1,20 +1,10 @@
 import { getCart, refreshCart } from './ecwid';
-import { debounce } from './utils';
+import { CartSyncController } from './cart-sync-controller';
 
-let started = false;
+let controller: CartSyncController | null = null;
 
-const debouncedSync = debounce(() => void runBundleCartSync(), 400);
-
-/** Ask Ecwid to recalculate cart totals (triggers discountUrl webhook for bundle deals). */
-export function startBundleCartSync(): void {
-  if (started) return;
-  started = true;
-
-  document.addEventListener('pb-cart-changed', () => debouncedSync());
-  window.addEventListener('pageshow', () => debouncedSync());
-
-  window.setInterval(() => void runBundleCartSync(), 10000);
-  void runBundleCartSync();
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 async function runBundleCartSync(): Promise<void> {
@@ -32,6 +22,18 @@ async function runBundleCartSync(): Promise<void> {
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+/** Ask Ecwid to recalculate cart totals (triggers discountUrl webhook for bundle deals). */
+export function startBundleCartSync(): void {
+  if (!controller) {
+    controller = new CartSyncController({
+      intervalMs: 10000,
+      onSync: runBundleCartSync,
+    });
+  }
+  controller.start();
+}
+
+export function stopBundleCartSync(): void {
+  controller?.stop();
+  controller = null;
 }

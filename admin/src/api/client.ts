@@ -5,10 +5,20 @@ function requestHeaders(): Record<string, string> {
   return dashboardAuthHeaders();
 }
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 async function parseJson<T>(res: Response): Promise<T> {
   if (res.status === 401) {
     window.location.href = '/api/auth/install';
-    throw new Error('Redirecting to sign in…');
+    throw new ApiError('Redirecting to sign in…', 401);
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -16,7 +26,7 @@ async function parseJson<T>(res: Response): Promise<T> {
       typeof body === 'object' && body && 'error' in body
         ? String((body as { error: string }).error)
         : `Request failed (${res.status})`;
-    throw new Error(message);
+    throw new ApiError(message, res.status);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -81,10 +91,15 @@ export async function loadSettings(): Promise<AppSettings> {
   return data.settings;
 }
 
-export async function searchProducts(query: string, limit = 24): Promise<CatalogProduct[]> {
+export async function searchProducts(
+  query: string,
+  limit = 24,
+  signal?: AbortSignal,
+): Promise<CatalogProduct[]> {
   const res = await fetch(apiUrl('/products', { search: query, limit: String(limit) }), {
     credentials: 'include',
     headers: requestHeaders(),
+    signal,
   });
   const data = await parseJson<{ products: CatalogProduct[] }>(res);
   return data.products ?? [];

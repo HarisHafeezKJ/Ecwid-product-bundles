@@ -57,7 +57,7 @@ export async function attributeOrder(
   storeId: string,
   orderId: string,
   lines: CartLineSnapshot[],
-  orderTotal: number,
+  _orderTotal: number,
   activeRules: BundleRule[],
 ): Promise<void> {
   const attributed = new Set<string>();
@@ -68,11 +68,9 @@ export async function attributeOrder(
     if (!isRuleEligible(rule, lines)) continue;
 
     const matching = lines.filter((line) => line.offerId === rule.id);
-    const revenue =
-      matching.length > 0
-        ? matching.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0)
-        : orderTotal;
+    if (matching.length === 0) continue;
 
+    const revenue = matching.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
     await insertConversion(storeId, rule.id, orderId, revenue);
     attributed.add(rule.id);
   }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { validateRuleForm, type BundleRule } from '@pb/shared';
 import * as api from '../api/client';
 import EditorSetup from '../components/editor/EditorSetup';
@@ -9,66 +9,66 @@ import { draftFromRule, draftToRuleInput } from '../components/editor/editor-dra
 import type { OfferDraft } from '../components/editor/editor-draft';
 
 interface OfferEditorProps {
-  mode: 'create' | 'edit';
+  /** Fully resolved by the route — the editor never fetches the rule itself. */
   initialDraft: OfferDraft;
   onClose: (saved: boolean, rule?: BundleRule) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
-export default function OfferEditor({ mode, initialDraft, onClose }: OfferEditorProps) {
+export default function OfferEditor({ initialDraft, onClose, onDirtyChange }: OfferEditorProps) {
   const [draft, setDraft] = useState<OfferDraft>(initialDraft);
+  const baselineRef = useRef(JSON.stringify(initialDraft));
   const [tab, setTab] = useState<'setup' | 'style'>('setup');
   const [device, setDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(mode === 'edit' && !initialDraft.id);
-  const [error, setError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const patchDraft = useCallback((patch: Partial<OfferDraft>) => {
     setDraft((prev) => ({ ...prev, ...patch }));
+    setValidationErrors([]);
+    setSaveError(null);
   }, []);
 
   const patchStyle = useCallback((patch: OfferDraft['widgetStyle']) => {
     setDraft((prev) => ({ ...prev, widgetStyle: { ...prev.widgetStyle, ...patch } }));
+    setValidationErrors([]);
+    setSaveError(null);
   }, []);
 
   useEffect(() => {
-    if (mode === 'edit' && initialDraft.id) {
-      void (async () => {
-        setLoading(true);
-        try {
-          const rule = await api.getRule(initialDraft.id!);
-          setDraft(draftFromRule(rule));
-        } catch {
-          setError('Could not load this offer. Cancel and try again.');
-        } finally {
-          setLoading(false);
-        }
-      })();
+    const dirty = JSON.stringify(draft) !== baselineRef.current;
+    onDirtyChange?.(dirty);
+  }, [draft, onDirtyChange]);
+
+  const requestClose = useCallback(() => {
+    if (JSON.stringify(draft) !== baselineRef.current) {
+      if (!window.confirm('Discard unsaved changes?')) return;
     }
-  }, [mode, initialDraft.id]);
+    onClose(false);
+  }, [draft, onClose]);
 
   const handleSave = async () => {
     const validation = validateRuleForm(draft);
     if (!validation.valid) {
-      setError(validation.errors[0] ?? 'Fix validation errors.');
+      setValidationErrors(validation.errors);
       return;
     }
     setSaving(true);
-    setError(null);
+    setSaveError(null);
+    setValidationErrors([]);
     try {
       const rule = await api.saveRule(draftToRuleInput(draft));
+      baselineRef.current = JSON.stringify(draftFromRule(rule));
       setToast('Saved successfully.');
       setTimeout(() => onClose(true, rule), 600);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save the rule.');
+      setSaveError(err instanceof Error ? err.message : 'Could not save the rule.');
     } finally {
       setSaving(false);
     }
   };
-
-  if (loading) {
-    return <div className="empty-state">Loading offer…</div>;
-  }
 
   return (
     <div>
@@ -87,6 +87,9 @@ export default function OfferEditor({ mode, initialDraft, onClose }: OfferEditor
               {draft.activateOnSave !== false ? 'Active' : 'Paused'}
             </span>
             <label className="toggle">
+              <span className="sr-only">
+                {draft.activateOnSave !== false ? 'Offer active' : 'Offer paused'}
+              </span>
               <input
                 type="checkbox"
                 checked={draft.activateOnSave !== false}
@@ -101,13 +104,13 @@ export default function OfferEditor({ mode, initialDraft, onClose }: OfferEditor
             </label>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <button type="button" className="btn btn-secondary" onClick={() => onClose(false)}>
+            <button type="button" className="btn btn-secondary" onClick={requestClose}>
               Cancel
             </button>
             <button
               type="button"
               className="btn btn-primary"
-              disabled={saving || Boolean(error?.includes('Could not load'))}
+              disabled={saving}
               onClick={() => void handleSave()}
             >
               {saving ? 'Saving…' : 'Save Offer'}
@@ -116,7 +119,17 @@ export default function OfferEditor({ mode, initialDraft, onClose }: OfferEditor
         </div>
       </div>
 
-      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
+      {saveError && <div className="error-banner" style={{ marginBottom: 16 }}>{saveError}</div>}
+      {validationErrors.length > 0 && (
+        <div className="error-banner" style={{ marginBottom: 16 }}>
+          <strong>Fix the following before saving:</strong>
+          <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
+            {validationErrors.map((message) => (
+              <li key={message}>{message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="editor-layout">
         <div className="editor-panel">

@@ -1,11 +1,10 @@
-import type { BundleRule } from '@pb/shared';
+import { toBundleRule, type BundleRule } from '@pb/shared';
 import type { EcwidStoreTokens } from '../ecwid.js';
 import { readPublicConfig } from '../storage/ecwid-storage.js';
-import { mapStoredRule, type StoredRuleRow } from './mappers.js';
 
 export interface PublicAppConfig {
   cartUpsellEnabled?: boolean;
-  rules?: StoredRuleRow[];
+  rules?: unknown[];
   rulesUpdatedAt?: string;
 }
 
@@ -38,12 +37,30 @@ export function decodeEcwidNestedJson(raw: unknown): unknown {
   return current;
 }
 
-function normalizePublicRules(raw: unknown): StoredRuleRow[] {
+/**
+ * Public config holds a mix of current BundleRule DTOs and legacy StoredRuleRow shapes.
+ * Both go through the same parser so clamping and widget-style defaults match DB reads.
+ */
+function ruleFromPublicRow(row: unknown): BundleRule | null {
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
+  const candidate = row as Record<string, unknown>;
+  const id = candidate.id ?? candidate._id;
+  if (typeof id !== 'string' || !id) return null;
+
+  const storeId = typeof candidate.storeId === 'string' ? candidate.storeId : '';
+  return toBundleRule(candidate, storeId);
+}
+
+function normalizePublicRules(raw: unknown): BundleRule[] {
   const decoded = decodeEcwidNestedJson(raw);
   if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) return [];
   const config = decoded as PublicAppConfig;
   if (!Array.isArray(config.rules)) return [];
-  return config.rules as StoredRuleRow[];
+  return config.rules
+    .map(ruleFromPublicRow)
+    .filter((rule): rule is BundleRule => rule != null)
+    .filter((rule) => rule.status === 'ACTIVE')
+    .sort((a, b) => (b.createdAt?.toISOString?.() ?? '').localeCompare(a.createdAt?.toISOString?.() ?? ''));
 }
 
 export async function readPublicAppConfig(tokens: EcwidStoreTokens): Promise<PublicAppConfig> {
@@ -55,16 +72,18 @@ export async function readPublicAppConfig(tokens: EcwidStoreTokens): Promise<Pub
 }
 
 export function listActiveRulesFromEmbeddedPublicConfig(raw: unknown): BundleRule[] {
-  return normalizePublicRules(raw)
-    .filter((row) => row.status === 'ACTIVE')
-    .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
-    .map((row) => mapStoredRule(row));
+  return normalizePublicRules(raw);
 }
 
 export async function listActiveRulesFromPublicConfig(tokens: EcwidStoreTokens): Promise<BundleRule[]> {
   const config = await readPublicAppConfig(tokens);
-  return normalizePublicRules(config)
-    .filter((row) => row.status === 'ACTIVE')
-    .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
-    .map((row) => mapStoredRule(row));
+  return normalizePublicRules(config);
+}
+
+export function serializeRulesForPublicConfig(rules: BundleRule[]): Record<string, unknown>[] {
+  return rules.map((rule) => ({
+    ...rule,
+    createdAt: rule.createdAt instanceof Date ? rule.createdAt.toISOString() : rule.createdAt,
+    updatedAt: rule.updatedAt instanceof Date ? rule.updatedAt.toISOString() : rule.updatedAt,
+  }));
 }

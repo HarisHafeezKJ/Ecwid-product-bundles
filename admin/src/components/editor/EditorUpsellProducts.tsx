@@ -17,6 +17,7 @@ export default function EditorUpsellProducts({
 }: EditorUpsellProductsProps) {
   const [scriptEnabled, setScriptEnabled] = useState(false);
   const [scriptLoading, setScriptLoading] = useState(true);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -29,14 +30,22 @@ export default function EditorUpsellProducts({
     })();
   }, []);
 
+  const showToast = (message: string, isError = false) => {
+    setToast(message);
+    setTimeout(() => setToast(null), 3200);
+    if (isError) console.error(message);
+  };
+
   const toggleScript = async () => {
     const next = !scriptEnabled;
     try {
       await api.setCartScriptEnabled(next);
       setScriptEnabled(next);
-      alert(next ? 'Cart upsells enabled. Publish the site to apply.' : 'Cart upsell script disabled.');
+      showToast(
+        next ? 'Cart upsells enabled. Publish the site to apply.' : 'Cart upsell script disabled.',
+      );
     } catch {
-      alert('Could not update the cart script.');
+      showToast('Could not update the cart script.', true);
     }
   };
 
@@ -48,6 +57,7 @@ export default function EditorUpsellProducts({
           Enable the embedded cart script so upsell offers appear on your cart page.
         </p>
         <label style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span className="sr-only">Enable cart upsell script</span>
           <span className="toggle">
             <input
               type="checkbox"
@@ -109,6 +119,8 @@ export default function EditorUpsellProducts({
           </div>
         </div>
       </div>
+
+      {toast && <div className={`toast${toast.includes('Could not') ? ' error' : ''}`}>{toast}</div>}
     </>
   );
 }

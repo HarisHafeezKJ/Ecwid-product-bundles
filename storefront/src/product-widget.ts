@@ -8,18 +8,13 @@ import { renderMixMatchOffer } from './widgets/mix-match-offer';
 import { renderVolumeOffer } from './widgets/volume-offer';
 
 const MOUNT_ID = 'pb-product-bundles';
-const RULE_CONTAINERS: Record<RuleType, string> = {
-  VOLUME_DISCOUNT: 'pb-volume-offer',
-  FIXED_BUNDLE: 'pb-bundle-offer',
-  MIX_AND_MATCH: 'pb-mix-match-offer',
-  CART_UPSELL: 'pb-cart-upsell',
-};
+const OFFER_CACHE_TTL_MS = 5 * 60 * 1000;
 
 let lastRenderedProductId: string | undefined;
 let initInFlight = false;
 let pendingInitPage: EcwidPage | undefined;
 let mountWatcher: MutationObserver | null = null;
-const offerCache = new Map<string, StorefrontWidgetView[]>();
+const offerCache = new Map<string, { views: StorefrontWidgetView[]; expiresAt: number }>();
 
 const debouncedRemountCheck = debounce(() => {
   if (!productPageLooksLikely()) return;
@@ -101,7 +96,7 @@ export async function initProductWidgets(page?: EcwidPage): Promise<void> {
 
 async function loadViews(productId: string): Promise<StorefrontWidgetView[]> {
   const cached = offerCache.get(productId);
-  if (cached) return cached;
+  if (cached && cached.expiresAt > Date.now()) return cached.views;
 
   let response = await fetchOffer({ productId });
   if (!response) {
@@ -110,7 +105,7 @@ async function loadViews(productId: string): Promise<StorefrontWidgetView[]> {
   }
 
   const views = normalizeViews(response);
-  offerCache.set(productId, views);
+  offerCache.set(productId, { views, expiresAt: Date.now() + OFFER_CACHE_TTL_MS });
   return views;
 }
 
@@ -270,7 +265,7 @@ function stopMountWatcher(): void {
 }
 
 function mountOfferView(host: HTMLElement, view: StorefrontWidgetView): void {
-  const containerId = RULE_CONTAINERS[view.ruleType] ?? `pb-offer-${view.ruleId}`;
+  const containerId = `pb-offer-${view.ruleId}`;
   let container = document.getElementById(containerId);
   if (!container) {
     container = document.createElement('div');

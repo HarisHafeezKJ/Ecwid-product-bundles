@@ -1,7 +1,7 @@
 import { cartPageLooksLikely } from '../ecwid';
 import type { EcwidPage } from '../types';
 
-const UPSSELL_MOUNT_ID = 'pb-cart-upsell';
+export const UPSELL_MOUNT_ID = 'pb-cart-upsell';
 const CONFIG_ID = 'pb-upsell-config';
 
 export function isCartUpsellEnabled(): boolean {
@@ -14,11 +14,11 @@ export function ensureCartUpsellMount(page?: EcwidPage): HTMLElement | null {
   if (!cartPageLooksLikely(page)) return null;
   if (!isCartUpsellEnabled()) return null;
 
-  let mount = document.getElementById(UPSSELL_MOUNT_ID);
+  let mount = document.getElementById(UPSELL_MOUNT_ID);
   if (mount) return mount;
 
   mount = document.createElement('div');
-  mount.id = UPSSELL_MOUNT_ID;
+  mount.id = UPSELL_MOUNT_ID;
 
   const anchor =
     document.querySelector('.ec-cart') ??
@@ -45,7 +45,7 @@ export function ensureCartUpsellMount(page?: EcwidPage): HTMLElement | null {
 }
 
 export function removeCartUpsellMount(): void {
-  document.getElementById(UPSSELL_MOUNT_ID)?.remove();
+  document.getElementById(UPSELL_MOUNT_ID)?.remove();
 }
 
 export function interceptNativeCheckout(onCheckout: () => void): () => void {

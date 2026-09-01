@@ -190,10 +190,15 @@ export function cartLineSnapshots(cart: EcwidCart | null): CartLineSnapshotPaylo
       item.productPrice ?? item.catalogPrice ?? item.price ?? item.product?.price ?? unitPrice,
     );
     const options = item.options ?? item.selectedOptions;
+    const variantId =
+      item.combinationId != null && String(item.combinationId).trim()
+        ? String(item.combinationId)
+        : undefined;
 
     return {
       lineId: item.id != null ? String(item.id) : String(index),
       productId: productId != null ? String(productId) : '',
+      variantId,
       quantity: Math.max(0, Number(item.quantity ?? 0)),
       unitPrice,
       catalogPrice,

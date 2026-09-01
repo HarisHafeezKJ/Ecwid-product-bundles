@@ -3,8 +3,10 @@ import type { CartLineSnapshot } from '@pb/shared';
 import { listActiveRulesForStore } from '../../lib/db/rules.js';
 import { loadAppSettings } from '../../lib/db/settings.js';
 import { buildCartUpsellView } from '../../lib/build-cart-upsell.js';
-import { corsHeaders, failResponse, jsonResponse } from '../../lib/api-response.js';
+import { serializeCartUpsellOffer } from '../../lib/serialize-cart-upsell.js';
+import { corsHeaders, jsonResponse } from '../../lib/api-response.js';
 import { getStoreTokens } from '../../lib/auth.js';
+import { getStoreProfile } from '../../lib/ecwid.js';
 import { requireStoreId } from '../../lib/store-context.js';
 
 function parseProductIds(req: { query: Record<string, unknown>; body?: Record<string, unknown> }): string[] {
@@ -87,7 +89,16 @@ async function handleCartUpsell(
       return;
     }
 
-    jsonResponse(res, req, { view, enabled: true });
+    let currency = 'USD';
+    try {
+      const profile = await getStoreProfile(tokens);
+      const raw = profile.formatsAndUnits as { currency?: string } | undefined;
+      if (raw?.currency) currency = String(raw.currency);
+    } catch {
+      /* optional */
+    }
+
+    jsonResponse(res, req, { offers: [serializeCartUpsellOffer(view)], enabled: true, currency });
   } catch (err) {
     console.error('cart-upsell error', err);
     res.status(204).set(corsHeaders(req)).end();

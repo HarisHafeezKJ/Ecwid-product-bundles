@@ -9,6 +9,7 @@ import { CLIENT_ERRORS, corsHeaders, failResponse, jsonResponse } from '../../li
 import { resolveStorefrontTokens } from '../../lib/storefront-tokens.js';
 import { requireStoreId } from '../../lib/store-context.js';
 import { getOAuthTokens } from '../../lib/storage/oauth-cache.js';
+import { parseAddDiscountedBody } from '../../lib/validate-body.js';
 
 function normalizeClientLines(lines: unknown[]): PriceLineInput[] {
   return lines.map((line) => {
@@ -66,25 +67,15 @@ addDiscountedRouter.options('/', (req, res) => {
 addDiscountedRouter.post('/', async (req, res) => {
   try {
     const storeId = requireStoreId(req);
-    const ruleId = String(req.body?.ruleId ?? '').trim();
-    const cartId = String(req.body?.cartId ?? '').trim() || undefined;
-    const lines = Array.isArray(req.body?.lines) ? req.body.lines : [];
+    const parsed = parseAddDiscountedBody({ ...req.query, ...(req.body as object | undefined) });
+    if (!parsed.ok) return failResponse(res, req, parsed.error, 400);
 
-    if (!ruleId) return failResponse(res, req, 'ruleId is required', 400);
-    if (lines.length === 0) return failResponse(res, req, 'lines are required', 400);
+    const { ruleId, cartId, lines, publicToken } = parsed.data;
 
-    const tokens = await resolveStorefrontTokens(
-      storeId,
-      String(req.body?.publicToken ?? req.query.publicToken ?? '').trim() || undefined,
-    );
+    const tokens = await resolveStorefrontTokens(storeId, publicToken || undefined);
     if (!tokens) return failResponse(res, req, 'Store not found', 404);
 
-    const rule = await resolveStorefrontBundleRule(
-      storeId,
-      ruleId,
-      tokens,
-      req.body?.publicConfig,
-    );
+    const rule = await resolveStorefrontBundleRule(storeId, ruleId, tokens);
     if (!rule || rule.status !== 'ACTIVE') return failResponse(res, req, 'Rule not found', 404);
 
     const normalized = expandLinesForRule(rule, normalizeClientLines(lines));
@@ -112,13 +103,16 @@ addDiscountedRouter.post('/', async (req, res) => {
     );
 
     const ecwidLines = pricedLinesToEcwidCartLines(priced);
+    const serverAdded = cartId != null && result.addedCount >= priced.length;
+    const failedLines = result.lineResults.filter((row) => !row.added);
 
     jsonResponse(res, req, {
-      ok: true,
+      ok: !cartId || serverAdded,
       cartId: result.cartId,
       lines: priced,
       ecwidLines,
-      serverAdded: result.addedCount >= priced.length,
+      serverAdded,
+      ...(failedLines.length > 0 ? { failedLines } : {}),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Could not add to cart';

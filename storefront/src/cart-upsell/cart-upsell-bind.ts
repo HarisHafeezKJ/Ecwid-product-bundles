@@ -6,11 +6,12 @@ export interface UpsellUiState {
   expanded: Set<string>;
   variantMap: Record<string, string>;
   offers: CartUpsellOffer[];
+  currency: string;
   adding: boolean;
   error?: string;
 }
 
-export function createUpsellState(offers: CartUpsellOffer[]): UpsellUiState {
+export function createUpsellState(offers: CartUpsellOffer[], currency = 'USD'): UpsellUiState {
   const variantMap: Record<string, string> = {};
   for (const offer of offers) {
     for (const product of offer.suggested) {
@@ -23,14 +24,21 @@ export function createUpsellState(offers: CartUpsellOffer[]): UpsellUiState {
     expanded: new Set(),
     variantMap,
     offers,
+    currency,
     adding: false,
   };
 }
 
-export function paintUpsell(root: HTMLElement, state: UpsellUiState, currency = 'USD'): void {
+export function paintUpsell(root: HTMLElement, state: UpsellUiState): void {
   const html = state.offers
     .map((offer) =>
-      cartUpsellBlockMarkup(offer, state.selected, state.expanded, state.variantMap, currency),
+      cartUpsellBlockMarkup(
+        offer,
+        state.selected,
+        state.expanded,
+        state.variantMap,
+        state.currency,
+      ),
     )
     .join('');
   root.innerHTML = html;

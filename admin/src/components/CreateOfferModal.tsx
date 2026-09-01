@@ -1,5 +1,6 @@
 import type { RuleType } from '@pb/shared';
 import { RULE_TYPE_DESCRIPTIONS, RULE_TYPE_LABELS } from '@pb/shared';
+import Modal from './Modal';
 
 const OFFER_TYPES: RuleType[] = [
   'VOLUME_DISCOUNT',
@@ -15,36 +16,26 @@ interface CreateOfferModalProps {
 
 export default function CreateOfferModal({ onClose, onSelect }: CreateOfferModalProps) {
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2 style={{ margin: 0, fontSize: '1.125rem' }}>Create New Offer</h2>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            ✕
+    <Modal title="Create New Offer" onClose={onClose}>
+      <p style={{ marginTop: 0, color: 'var(--pb-text-muted)' }}>
+        Choose the type of offer you want to create.
+      </p>
+      <div className="grid-2">
+        {OFFER_TYPES.map((type) => (
+          <button
+            key={type}
+            type="button"
+            className="section-card"
+            style={{ textAlign: 'left', cursor: 'pointer' }}
+            onClick={() => onSelect(type)}
+          >
+            <strong>{RULE_TYPE_LABELS[type]}</strong>
+            <p style={{ margin: '8px 0 0', fontSize: '0.875rem', color: 'var(--pb-text-muted)' }}>
+              {RULE_TYPE_DESCRIPTIONS[type]}
+            </p>
           </button>
-        </div>
-        <div className="modal-body">
-          <p style={{ marginTop: 0, color: 'var(--pb-text-muted)' }}>
-            Choose the type of offer you want to create.
-          </p>
-          <div className="grid-2">
-            {OFFER_TYPES.map((type) => (
-              <button
-                key={type}
-                type="button"
-                className="section-card"
-                style={{ textAlign: 'left', cursor: 'pointer' }}
-                onClick={() => onSelect(type)}
-              >
-                <strong>{RULE_TYPE_LABELS[type]}</strong>
-                <p style={{ margin: '8px 0 0', fontSize: '0.875rem', color: 'var(--pb-text-muted)' }}>
-                  {RULE_TYPE_DESCRIPTIONS[type]}
-                </p>
-              </button>
-            ))}
-          </div>
-        </div>
+        ))}
       </div>
-    </div>
+    </Modal>
   );
 }

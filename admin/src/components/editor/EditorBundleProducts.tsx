@@ -133,6 +133,7 @@ export default function EditorBundleProducts({ draft, onChange }: EditorBundlePr
       <ProductPoolGrid
         selectedIds={items.map((i) => i.productId)}
         maxItems={50}
+        minItems={2}
         onChange={(ids, products) => {
           const next = ids.map((id) => {
             const existing = items.find((i) => i.productId === id);

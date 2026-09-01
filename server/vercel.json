@@ -6,7 +6,7 @@
   "outputDirectory": "public",
   "functions": {
     "api/index.ts": {
-      "includeFiles": "dist/**,static/**,.env"
+      "includeFiles": ".env,dist/**,static/**"
     }
   },
   "rewrites": [

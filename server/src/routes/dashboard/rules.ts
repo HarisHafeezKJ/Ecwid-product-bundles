@@ -8,7 +8,7 @@ import {
   setBundleStatus,
   syncRulesToPublicConfigForStore,
 } from '../../lib/db/rules.js';
-import { CLIENT_ERRORS, failResponse, jsonResponse } from '../../lib/api-response.js';
+import { CLIENT_ERRORS, failResponse, isClientError, jsonResponse } from '../../lib/api-response.js';
 import { requireDashboardAuth } from '../../lib/auth.js';
 import type { RuleStatus } from '@pb/shared';
 import { isRuleType } from '@pb/shared';
@@ -54,7 +54,7 @@ rulesRouter.post('/', async (req, res) => {
     jsonResponse(res, req, { rule });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to save rule';
-    const status = CLIENT_ERRORS.has(message) ? 400 : 500;
+    const status = isClientError(err) || CLIENT_ERRORS.has(message) ? 400 : 500;
     failResponse(res, req, message, status);
   }
 });

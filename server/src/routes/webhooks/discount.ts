@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { calculateCartDiscounts, type EcwidDiscountCartItem } from '../../lib/cart-discount.js';
 import { resolveWebhookRules } from '../../lib/storefront-rules.js';
+import { verifyDiscountWebhookStore } from '../../lib/webhook-verify.js';
 
 export const discountWebhookRouter = Router();
 
@@ -30,12 +31,22 @@ discountWebhookRouter.post('/', async (req, res) => {
       return;
     }
 
+    // A cold Vercel lambda has an empty token cache, so an install check alone would drop
+    // every discount until the store re-authenticates. Embedded merchantAppSettings let the
+    // request stand on its own: without resolvable rules the response is empty regardless.
+    const merchantAppSettings = req.body?.merchantAppSettings;
+    if (!merchantAppSettings && !(await verifyDiscountWebhookStore(storeId))) {
+      console.warn('[pb-discount-webhook] unknown or uninstalled store', storeId);
+      res.status(200).json({ discounts: [] });
+      return;
+    }
+
     const rawItems = Array.isArray(req.body?.cart?.items) ? req.body.cart.items : [];
     const items = parseDiscountCartItems(rawItems).filter(
       (item) => item.productId > 0 && (item.amount ?? 0) > 0,
     );
 
-    const rules = await resolveWebhookRules(storeId, req.body?.merchantAppSettings);
+    const rules = await resolveWebhookRules(storeId, merchantAppSettings);
     if (!rules.length) {
       console.warn('[pb-discount-webhook] no active rules for store', storeId);
       res.status(200).json({ discounts: [] });

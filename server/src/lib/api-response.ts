@@ -49,6 +49,20 @@ export function failResponse(
   jsonResponse(res, req, { ok: false, error: message }, status);
 }
 
+/** Validation and other client-facing errors that should return HTTP 400. */
+export class ClientError extends Error {
+  readonly status = 400;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'ClientError';
+  }
+}
+
+export function isClientError(err: unknown): err is ClientError {
+  return err instanceof ClientError;
+}
+
 export const CLIENT_ERRORS = new Set([
   'Bundle is not available',
   'Bundle is incomplete',

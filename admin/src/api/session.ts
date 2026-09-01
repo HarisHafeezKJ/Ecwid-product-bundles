@@ -39,10 +39,17 @@ export async function checkDashboardSession(): Promise<boolean> {
     return false;
   }
 
-  const res = await fetch('/api/auth/session', {
-    credentials: 'include',
-    headers: dashboardAuthHeaders(),
-  });
-  const data = (await res.json()) as { authenticated?: boolean };
-  return Boolean(data.authenticated);
+  try {
+    const res = await fetch('/api/auth/session', {
+      credentials: 'include',
+      headers: dashboardAuthHeaders(),
+    });
+    if (!res.ok) {
+      throw new Error(`Session check failed (${res.status})`);
+    }
+    const data = (await res.json()) as { authenticated?: boolean };
+    return Boolean(data.authenticated);
+  } catch {
+    throw new Error('Could not reach the server. Check your connection and try again.');
+  }
 }

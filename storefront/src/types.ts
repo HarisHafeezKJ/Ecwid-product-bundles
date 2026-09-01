@@ -1,98 +1,30 @@
-export type RuleType =
-  | 'FIXED_BUNDLE'
-  | 'MIX_AND_MATCH'
-  | 'VOLUME_DISCOUNT'
-  | 'CART_UPSELL';
+import type {
+  RuleType,
+  OfferLayout,
+  WidgetStyle,
+  SerializedStorefrontWidgetView,
+  SerializedWidgetProductItem,
+  SerializedVolumeTierView,
+  StorefrontOfferResponse,
+} from '@pb/shared';
 
-export type OfferLayout = 'VERTICAL' | 'HORIZONTAL';
+export type {
+  RuleType,
+  OfferLayout,
+  WidgetStyle,
+  SerializedStorefrontWidgetView,
+  SerializedWidgetProductItem,
+  SerializedVolumeTierView,
+  StorefrontOfferResponse,
+};
 
 export type BundleDivider = 'LINE' | 'PLUS' | 'PLUS_LINE';
 
-export interface WidgetStyle {
-  blockTitle?: string;
-  addToCartText?: string;
-  addingToCartText?: string;
-  addToCartErrorText?: string;
-  buyAllAtText?: string;
-  buyAllTagText?: string;
-  summaryBuy?: string;
-  summarySave?: string;
-  standardPriceText?: string;
-  outOfStockText?: string;
-  unavailableOptionText?: string;
-  checkoutLabel?: string;
-  promoLabel?: string;
-  mixCtaSelectMore?: string;
-  mixCtaAdd?: string;
-  checkoutCtaLabel?: string;
-  divider?: BundleDivider;
-  layout?: OfferLayout;
-  [key: string]: string | number | boolean | undefined;
-}
-
-export interface VariantOption {
-  id: string;
-  label: string;
-  inStock: boolean;
-  price?: number;
-}
-
-export interface WidgetProductItem {
-  productId: string;
-  name: string;
-  imageUrl?: string;
-  minQuantity: number;
-  price: number;
-  discountedPrice?: number;
-  originalPrice?: number;
-  sku?: string;
-  isPrimary?: boolean;
-  inStock?: boolean;
-  defaultVariantId?: string;
-  adminLocksVariant?: boolean;
-  chooseVariationPerItem?: boolean;
-  variants?: VariantOption[];
-}
-
-export interface VolumeTierView {
-  qty: number;
-  title?: string;
-  discountType?: string;
-  discountValue?: number;
-  imageUrl?: string;
-  imageRadius?: number;
-  imageSize?: number;
-  unitPrice?: number;
-  discountedUnitPrice?: number;
-  savings?: number;
-}
-
-export interface StorefrontWidgetView {
-  ruleId: string;
-  ruleType: RuleType;
-  overViewLimit?: boolean;
-  status?: string;
-  layout?: OfferLayout;
-  allowVariantChoice?: boolean;
-  chooseVariationPerItem?: boolean;
-  mixRequiredCount?: number;
-  widgetStyle: WidgetStyle;
-  items: WidgetProductItem[];
-  volumeTiers?: VolumeTierView[];
-  discounted?: number;
-  original?: number;
-  savings?: number;
-  mixDiscounted?: number;
-  mixOriginal?: number;
-  mixSavings?: number;
-  currency?: string;
-  targetProductId?: string;
-}
-
-export interface OfferResponse {
-  view?: StorefrontWidgetView;
-  views?: StorefrontWidgetView[];
-}
+export type StorefrontWidgetView = SerializedStorefrontWidgetView;
+export type OfferResponse = StorefrontOfferResponse;
+export type WidgetProductItem = SerializedWidgetProductItem;
+export type VolumeTierView = SerializedVolumeTierView;
+export type VariantOption = NonNullable<SerializedWidgetProductItem['variants']>[number];
 
 export interface DiscountedLine {
   productId: string;
@@ -111,8 +43,8 @@ export interface AddDiscountedResponse {
   cartId?: string;
   lines?: PricedLineResponse[];
   ecwidLines?: EcwidCartLinePayload[];
-  /** True when all lines were added via Ecwid REST cart API (client JS add can be skipped). */
   serverAdded?: boolean;
+  failedLines?: { productId: string; variantId?: string; added: boolean; error?: string }[];
 }
 
 export interface PricedLineResponse {
@@ -159,7 +91,23 @@ export interface CartUpsellOffer {
 
 export interface CartUpsellResponse {
   enabled?: boolean;
+  currency?: string;
   offers?: CartUpsellOffer[];
+  view?: {
+    rule: {
+      id: string;
+      widgetStyle?: WidgetStyle;
+    };
+    suggested: {
+      id: string;
+      name: string;
+      imageUrl?: string;
+      price: number;
+      inStock?: boolean;
+      variants?: VariantOption[];
+    }[];
+    checkoutCtaLabel?: string;
+  };
 }
 
 export interface CartLineSnapshotPayload {
@@ -185,6 +133,7 @@ export interface EcwidCartItem {
   price?: number;
   productPrice?: number;
   catalogPrice?: number;
+  combinationId?: number | string;
   options?: Record<string, string>;
   selectedOptions?: Record<string, string>;
 }

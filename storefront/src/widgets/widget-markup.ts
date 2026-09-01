@@ -3,8 +3,9 @@ import type {
   VolumeTierView,
   WidgetProductItem,
   WidgetStyle,
+  BundleDivider,
 } from '../types';
-import { escapeHtml, formatMoney, replaceTokens } from '../utils';
+import { escapeHtml, formatMoney, replaceTokens, asCopyText } from '../utils';
 import { styleAttrFromWidgetStyle } from './widget-style-css';
 
 function productImage(item: WidgetProductItem): string {
@@ -50,15 +51,16 @@ export function volumeOfferMarkup(view: StorefrontWidgetView, selectedQty: numbe
     .join('');
 
   return `<section class="pb-widget pb-volume pb-volume--${layout.toLowerCase()}" data-rule-id="${escapeHtml(view.ruleId)}" style="${styleAttr}">
-    <h3 class="pb-widget__title">${escapeHtml(style.blockTitle ?? 'Quantity offers')}</h3>
+    <h3 class="pb-widget__title">${escapeHtml(asCopyText(style.blockTitle, 'Quantity offers'))}</h3>
     <div class="pb-volume__tiers" role="radiogroup" aria-label="Quantity offers">${cards}</div>
     <div class="pb-volume__variants" data-pb-volume-variants hidden></div>
     <div class="pb-volume__summary">
-      <span class="pb-volume__summary-buy">${escapeHtml(style.summaryBuy ?? 'Buy')}</span>
-      <span class="pb-volume__summary-save">${escapeHtml(style.summarySave ?? 'Save')}</span>
+      <span class="pb-volume__summary-buy">${escapeHtml(asCopyText(style.summaryBuy, 'Buy'))}</span>
+      <span class="pb-volume__summary-save">${escapeHtml(asCopyText(style.summarySave, 'Save'))}</span>
     </div>
-    <button type="button" class="pb-btn pb-btn--atc" data-pb-atc>${escapeHtml(style.addToCartText ?? 'Add to cart')}</button>
-    <p class="pb-widget__error" data-pb-error hidden></p>
+    <button type="button" class="pb-btn pb-btn--atc" data-pb-atc aria-describedby="pb-error-${escapeHtml(view.ruleId)}">${escapeHtml(asCopyText(style.addToCartText, 'Add to cart'))}</button>
+    <p class="pb-widget__error" id="pb-error-${escapeHtml(view.ruleId)}" data-pb-error hidden role="alert"></p>
+    <div class="pb-sr-only" aria-live="polite" aria-atomic="true" data-pb-atc-status></div>
   </section>`;
 }
 
@@ -82,16 +84,16 @@ export function fixedBundleMarkup(view: StorefrontWidgetView): string {
   const style = view.widgetStyle;
   const currency = view.currency ?? 'USD';
   const styleAttr = styleAttrFromWidgetStyle(style);
-  const divider = style.divider ?? 'PLUS';
+  const divider = asCopyText(style.divider, 'PLUS') as BundleDivider;
   const rows = view.items
     .map((item, index) => bundleProductRow(item, style, currency, index, view.items.length, divider))
     .join('');
 
   return `<section class="pb-widget pb-bundle" data-rule-id="${escapeHtml(view.ruleId)}" style="${styleAttr}">
-    <h3 class="pb-widget__title">${escapeHtml(style.blockTitle ?? 'Bundle offer')}</h3>
+    <h3 class="pb-widget__title">${escapeHtml(asCopyText(style.blockTitle, 'Bundle offer'))}</h3>
     <div class="pb-bundle__products">${rows}</div>
     <div class="pb-bundle__summary">
-      <span class="pb-bundle__buy-all">${escapeHtml(style.buyAllAtText ?? 'Buy all at')}</span>
+      <span class="pb-bundle__buy-all">${escapeHtml(asCopyText(style.buyAllAtText, 'Buy all at'))}</span>
       <span class="pb-bundle__price">${formatMoney(view.discounted, currency)}</span>
       ${
         view.original != null && view.discounted != null && view.original > view.discounted
@@ -100,12 +102,13 @@ export function fixedBundleMarkup(view: StorefrontWidgetView): string {
       }
       ${
         view.savings != null && view.savings > 0
-          ? `<span class="pb-bundle__tag">${escapeHtml(style.buyAllTagText ?? 'Save')} ${formatMoney(view.savings, currency)}</span>`
+          ? `<span class="pb-bundle__tag">${escapeHtml(asCopyText(style.buyAllTagText, 'Save'))} ${formatMoney(view.savings, currency)}</span>`
           : ''
       }
     </div>
-    <button type="button" class="pb-btn pb-btn--atc" data-pb-atc>${escapeHtml(style.addToCartText ?? 'Add bundle to cart')}</button>
-    <p class="pb-widget__error" data-pb-error hidden></p>
+    <button type="button" class="pb-btn pb-btn--atc" data-pb-atc aria-describedby="pb-error-${escapeHtml(view.ruleId)}">${escapeHtml(asCopyText(style.addToCartText, 'Add bundle to cart'))}</button>
+    <p class="pb-widget__error" id="pb-error-${escapeHtml(view.ruleId)}" data-pb-error hidden role="alert"></p>
+    <div class="pb-sr-only" aria-live="polite" aria-atomic="true" data-pb-atc-status></div>
   </section>`;
 }
 
@@ -152,18 +155,23 @@ export function mixMatchMarkup(view: StorefrontWidgetView, selectedQty: number):
     .join('');
 
   return `<section class="pb-widget pb-mix" data-rule-id="${escapeHtml(view.ruleId)}" style="${styleAttr}">
-    <h3 class="pb-widget__title">${escapeHtml(style.blockTitle ?? 'Mix & Match')}</h3>
+    <h3 class="pb-widget__title">${escapeHtml(asCopyText(style.blockTitle, 'Mix & Match'))}</h3>
     <div class="pb-mix__products">${rows}</div>
     <div class="pb-mix__summary">
       <span class="pb-mix__total">${formatMoney(view.mixDiscounted, currency)}</span>
-      ${
+      <span class="pb-mix__original"${
         view.mixOriginal != null && view.mixDiscounted != null && view.mixOriginal > view.mixDiscounted
-          ? `<span class="pb-mix__original">${formatMoney(view.mixOriginal, currency)}</span>`
+          ? ''
+          : ' hidden'
+      }>${
+        view.mixOriginal != null && view.mixDiscounted != null && view.mixOriginal > view.mixDiscounted
+          ? formatMoney(view.mixOriginal, currency)
           : ''
-      }
+      }</span>
     </div>
-    <button type="button" class="pb-btn pb-btn--atc" data-pb-atc${selectedQty < required ? ' disabled' : ''}>${escapeHtml(cta)}</button>
-    <p class="pb-widget__error" data-pb-error hidden></p>
+    <button type="button" class="pb-btn pb-btn--atc" data-pb-atc${selectedQty < required ? ' disabled' : ''} aria-describedby="pb-error-${escapeHtml(view.ruleId)}">${escapeHtml(cta)}</button>
+    <p class="pb-widget__error" id="pb-error-${escapeHtml(view.ruleId)}" data-pb-error hidden role="alert"></p>
+    <div class="pb-sr-only" aria-live="polite" aria-atomic="true" data-pb-atc-status></div>
   </section>`;
 }
 
@@ -185,10 +193,10 @@ function mixProductRow(item: WidgetProductItem, _style: WidgetStyle, currency: s
 
 export function mixCtaLabel(style: WidgetStyle, selectedQty: number, required: number): string {
   if (selectedQty >= required) {
-    return style.mixCtaAdd ?? style.addToCartText ?? 'Add to cart';
+    return asCopyText(style.mixCtaAdd ?? style.addToCartText, 'Add to cart');
   }
   const remaining = Math.max(required - selectedQty, 0);
-  const template = style.mixCtaSelectMore ?? 'Select {{COUNT}} more';
+  const template = asCopyText(style.mixCtaSelectMore, 'Select {{COUNT}} more');
   return replaceTokens(template, { COUNT: remaining });
 }
 

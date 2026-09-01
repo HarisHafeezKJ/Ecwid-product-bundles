@@ -14,13 +14,13 @@ import {
   getOAuthTokens,
   hydrateOAuthCache,
   persistOAuthTokens,
-  refreshOAuthFromStorage,
   ensureStoreTokens,
 } from './storage/oauth-cache.js';
 
 loadEnvFiles();
 
 const SESSION_COOKIE = 'pb_session';
+const SESSION_VERSION = 2;
 
 export interface PbSession {
   storeId?: string;
@@ -33,22 +33,76 @@ declare module 'express-serve-static-core' {
   }
 }
 
+function signingKey(): Buffer {
+  return crypto.createHash('sha256').update(getSigningSecret()).digest();
+}
+
 function sign(value: string): string {
-  return crypto.createHmac('sha256', getSigningSecret()).update(value).digest('hex').slice(0, 16);
+  return crypto.createHmac('sha256', getSigningSecret()).update(value).digest('hex');
+}
+
+function encryptAccessToken(accessToken: string): string {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', signingKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(accessToken, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, tag, encrypted]).toString('base64url');
+}
+
+function decryptAccessToken(sealed: string): string | undefined {
+  try {
+    const buf = Buffer.from(sealed, 'base64url');
+    if (buf.length < 29) return undefined;
+    const iv = buf.subarray(0, 12);
+    const tag = buf.subarray(12, 28);
+    const encrypted = buf.subarray(28);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', signingKey(), iv);
+    decipher.setAuthTag(tag);
+    const plain = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+    return plain.toString('utf8');
+  } catch {
+    return undefined;
+  }
 }
 
 function encodeSessionPayload(storeId: string, accessToken: string): string {
-  const payload = Buffer.from(JSON.stringify({ storeId, accessToken }), 'utf8').toString('base64url');
+  const payload = Buffer.from(
+    JSON.stringify({
+      v: SESSION_VERSION,
+      storeId,
+      t: encryptAccessToken(accessToken),
+    }),
+    'utf8',
+  ).toString('base64url');
   return `${payload}.${sign(payload)}`;
 }
 
 function decodeSessionPayload(raw: string): PbSession | undefined {
   const [payload, sig] = raw.split('.');
   if (!payload || !sig || sign(payload) !== sig) return undefined;
+
   try {
-    const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as PbSession;
-    if (!parsed.storeId || !parsed.accessToken) return undefined;
-    return parsed;
+    const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
+      v?: number;
+      storeId?: string;
+      t?: string;
+      accessToken?: string;
+    };
+
+    if (!parsed.storeId) return undefined;
+
+    if (parsed.v === SESSION_VERSION && parsed.t) {
+      const accessToken = decryptAccessToken(parsed.t);
+      if (!accessToken) return undefined;
+      return { storeId: parsed.storeId, accessToken };
+    }
+
+    // Legacy v1 sessions (plaintext accessToken) — still accepted during migration.
+    if (parsed.accessToken) {
+      return { storeId: parsed.storeId, accessToken: parsed.accessToken };
+    }
+
+    return undefined;
   } catch {
     return undefined;
   }
@@ -75,7 +129,6 @@ function sessionCookieOptions(): {
   if (isProduction()) {
     return {
       httpOnly: true,
-      // Required when Ecwid admin embeds this app in a cross-site iframe (Chrome blocks Lax cookies).
       sameSite: 'none',
       secure: true,
       partitioned: true,
@@ -95,14 +148,32 @@ function parseBearerSession(authHeader: string | undefined): PbSession | undefin
   return decodeSessionPayload(authHeader.slice(7).trim());
 }
 
-export function sessionMiddleware(req: Request, _res: Response, next: NextFunction): void {
+export async function sessionMiddleware(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): Promise<void> {
   const fromCookie = parseSessionCookie(req.headers.cookie);
   const fromBearer = parseBearerSession(req.headers.authorization);
-  req.session = fromCookie ?? fromBearer ?? {};
+  const parsed = fromCookie ?? fromBearer;
 
-  if (req.session.storeId && req.session.accessToken) {
-    hydrateOAuthCache(req.session.storeId, req.session.accessToken);
+  if (parsed?.storeId && parsed.accessToken) {
+    hydrateOAuthCache(parsed.storeId, parsed.accessToken);
+    req.session = parsed;
+    next();
+    return;
   }
+
+  if (parsed?.storeId) {
+    const tokens = await ensureStoreTokens(parsed.storeId);
+    if (tokens?.accessToken) {
+      req.session = { storeId: parsed.storeId, accessToken: tokens.accessToken };
+      next();
+      return;
+    }
+  }
+
+  req.session = {};
   next();
 }
 

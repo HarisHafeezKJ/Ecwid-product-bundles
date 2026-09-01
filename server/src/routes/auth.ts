@@ -29,9 +29,9 @@ authRouter.get('/callback', async (req, res) => {
 
     const tokens = await exchangeOAuthCode(req, storeId, code);
     await persistStoreAuth(tokens.storeId, tokens.accessToken, tokens.publicToken);
-    const sessionToken = setSession(res, tokens.storeId, tokens.accessToken);
+    setSession(res, tokens.storeId, tokens.accessToken);
 
-    res.redirect(`${getAdminRedirectUrl(req, tokens.storeId)}&bootstrap=${encodeURIComponent(sessionToken)}`);
+    res.redirect(getAdminRedirectUrl(req, tokens.storeId));
   } catch (err) {
     console.error('OAuth callback failed', err);
     res.status(500).send('Authentication failed');

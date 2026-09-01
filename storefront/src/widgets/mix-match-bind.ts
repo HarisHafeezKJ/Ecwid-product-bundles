@@ -2,7 +2,8 @@ import type { WidgetShellState } from './widget-shell';
 import { mixSelectedQty } from './widget-shell';
 import { mixMatchMarkup, mixCtaLabel } from './widget-markup';
 import { bindVariantSelects } from './widget-shell';
-import { qs, qsa } from '../utils';
+import { computeMixTotals } from './mix-pricing';
+import { formatMoney, qs, qsa } from '../utils';
 
 export function bindMixControls(
   root: HTMLElement,
@@ -22,9 +23,21 @@ export function bindMixControls(
     if (!input || !dec || !inc) return;
 
     const sync = (next: number) => {
-      const val = Math.max(0, next);
+      const required = state.view.mixRequiredCount ?? 1;
+      const current = state.mixQtys[productId] ?? 0;
+      const otherQty = mixSelectedQty(state.mixQtys) - current;
+      const maxForProduct = Math.max(0, required - otherQty);
+      const val = Math.min(Math.max(0, next), maxForProduct);
+
+      if (next > maxForProduct) {
+        showMixCapHint(stepper, required);
+      } else {
+        clearMixCapHint(stepper);
+      }
+
       state.mixQtys[productId] = val;
       input.value = String(val);
+      updateMixQtyButtons(root, state);
       updateMixCta(root, state);
       rerenderSummary(root, state);
     };
@@ -36,7 +49,20 @@ export function bindMixControls(
     input.value = String(state.mixQtys[productId] ?? 0);
   });
 
+  updateMixQtyButtons(root, state);
   updateMixCta(root, state);
+}
+
+function updateMixQtyButtons(root: HTMLElement, state: WidgetShellState): void {
+  const required = state.view.mixRequiredCount ?? 1;
+  const atCap = mixSelectedQty(state.mixQtys) >= required;
+  // A disabled button cannot surface the click hint, so the reason lives on the tooltip.
+  const reason = `You can select up to ${required} items. Remove one to swap.`;
+  qsa<HTMLButtonElement>(root, '[data-pb-qty-inc]').forEach((btn) => {
+    btn.disabled = atCap;
+    if (atCap) btn.title = reason;
+    else btn.removeAttribute('title');
+  });
 }
 
 function updateMixCta(root: HTMLElement, state: WidgetShellState): void {
@@ -51,6 +77,40 @@ function updateMixCta(root: HTMLElement, state: WidgetShellState): void {
 function rerenderSummary(root: HTMLElement, state: WidgetShellState): void {
   const selected = mixSelectedQty(state.mixQtys);
   root.dataset.pbMixQty = String(selected);
+  updateMixSummary(root, state);
+}
+
+export function updateMixSummary(root: HTMLElement, state: WidgetShellState): void {
+  const selected = mixSelectedQty(state.mixQtys);
+  const { original, discounted } = computeMixTotals(
+    state.view,
+    state.mixQtys,
+    state.variantSelections,
+  );
+  const currency = state.view.currency ?? 'USD';
+  const totalEl = qs<HTMLElement>(root, '.pb-mix__total');
+  const originalEl = qs<HTMLElement>(root, '.pb-mix__original');
+
+  if (totalEl) {
+    totalEl.textContent =
+      selected > 0 ? formatMoney(discounted, currency) : formatMoney(state.view.mixDiscounted, currency);
+  }
+
+  if (originalEl) {
+    const showOriginal =
+      selected > 0
+        ? original > discounted
+        : state.view.mixOriginal != null &&
+          state.view.mixDiscounted != null &&
+          state.view.mixOriginal > state.view.mixDiscounted;
+    originalEl.hidden = !showOriginal;
+    if (showOriginal) {
+      originalEl.textContent = formatMoney(
+        selected > 0 ? original : state.view.mixOriginal,
+        currency,
+      );
+    }
+  }
 }
 
 export function paintMixMatch(root: HTMLElement, state: WidgetShellState): void {
@@ -61,4 +121,25 @@ export function paintMixMatch(root: HTMLElement, state: WidgetShellState): void 
   if (!next) return;
   root.replaceWith(next);
   bindMixControls(next, state, () => paintMixMatch(next, state));
+}
+
+function showMixCapHint(stepper: HTMLElement, required: number): void {
+  let hint = stepper.parentElement?.querySelector<HTMLElement>('[data-pb-mix-cap]') ?? null;
+  if (!hint) {
+    hint = document.createElement('p');
+    hint.className = 'pb-widget__error';
+    hint.dataset.pbMixCap = 'true';
+    hint.setAttribute('role', 'status');
+    stepper.insertAdjacentElement('afterend', hint);
+  }
+  hint.hidden = false;
+  hint.textContent = `You can select up to ${required} items.`;
+}
+
+function clearMixCapHint(stepper: HTMLElement): void {
+  const hint = stepper.parentElement?.querySelector<HTMLElement>('[data-pb-mix-cap]');
+  if (hint) {
+    hint.hidden = true;
+    hint.textContent = '';
+  }
 }

@@ -1,5 +1,5 @@
 import type { CartUpsellOffer, CartUpsellProduct, WidgetStyle } from '../types';
-import { escapeHtml, formatMoney, replaceTokens } from '../utils';
+import { escapeHtml, formatMoney, replaceTokens, asCopyText } from '../utils';
 import { styleAttrFromWidgetStyle } from '../widgets/widget-style-css';
 
 export function cartUpsellBlockMarkup(
@@ -19,7 +19,7 @@ export function cartUpsellBlockMarkup(
   const cta = checkoutCtaLabel(style as WidgetStyle, selectedCount);
 
   return `<div class="pb-upsell" data-rule-id="${escapeHtml(offer.ruleId)}" style="${styleAttr}">
-    <h3 class="pb-upsell__title">${escapeHtml(offer.blockTitle ?? style.blockTitle ?? 'Customers also bought')}</h3>
+    <h3 class="pb-upsell__title">${escapeHtml(offer.blockTitle ?? asCopyText(style.blockTitle, 'Customers also bought'))}</h3>
     <div class="pb-upsell__grid">${cards}</div>
     <button type="button" class="pb-upsell__checkout" data-pb-upsell-checkout${selectedCount === 0 ? ' disabled' : ''}>${escapeHtml(cta)}</button>
     <p class="pb-upsell__error" data-pb-upsell-error hidden></p>
@@ -64,7 +64,7 @@ function upsellProductCard(
 }
 
 export function checkoutCtaLabel(style: WidgetStyle, count: number): string {
-  if (count <= 0) return style.checkoutCtaLabel ?? 'Select items to checkout';
-  const template = style.checkoutCtaLabel ?? 'Add {{COUNT}} items & checkout →';
+  if (count <= 0) return asCopyText(style.checkoutCtaLabel, 'Select items to checkout');
+  const template = asCopyText(style.checkoutCtaLabel, 'Add {{COUNT}} items & checkout →');
   return replaceTokens(template, { COUNT: count });
 }

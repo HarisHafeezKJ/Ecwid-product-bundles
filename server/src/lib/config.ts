@@ -7,30 +7,10 @@ import manifestJson from '../app.manifest.json' with { type: 'json' };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export interface AppManifest {
-  name: string;
-  version: string;
-  description?: string;
-  scopes: string[];
-  paths: {
-    oauthCallback: string;
-    oauthInstall: string;
-    webhook: string;
-    discountWebhook: string;
-    storefrontScript: string;
-    storefrontApi: string;
-    dashboardApi: string;
-    adminMount: string;
-    health: string;
-  };
-  storage: {
-    rules: string;
-    settings: string;
-    impressions: string;
-    oauth: string;
-    public: string;
-  };
-}
+export type AppManifest = typeof manifestJson;
+
+const _manifestTypeCheck: AppManifest = manifestJson;
+void _manifestTypeCheck;
 
 let envLoaded = false;
 

@@ -22,6 +22,13 @@ export interface EcwidCart {
   cartId?: string;
 }
 
+export interface EcwidAddCartLineResult {
+  productId: string;
+  variantId?: string;
+  added: boolean;
+  error?: string;
+}
+
 export interface EcwidAddCartLineInput {
   productId: string;
   quantity: number;
@@ -299,7 +306,12 @@ export async function addToCart(
   tokens: EcwidStoreTokens,
   cartId: string | undefined,
   lines: EcwidAddCartLineInput[],
-): Promise<{ cartId?: string; lines: EcwidAddCartLineInput[]; addedCount: number }> {
+): Promise<{
+  cartId?: string;
+  lines: EcwidAddCartLineInput[];
+  addedCount: number;
+  lineResults: EcwidAddCartLineResult[];
+}> {
   const pricedLines = lines.map((line) => ({
     ...line,
     options: {
@@ -308,10 +320,22 @@ export async function addToCart(
   }));
 
   if (!cartId) {
-    return { cartId: undefined, lines: pricedLines, addedCount: 0 };
+    return {
+      cartId: undefined,
+      lines: pricedLines,
+      addedCount: 0,
+      lineResults: pricedLines.map((line) => ({
+        productId: line.productId,
+        variantId: line.variantId,
+        added: false,
+        error: 'No cart id',
+      })),
+    };
   }
 
+  const lineResults: EcwidAddCartLineResult[] = [];
   let addedCount = 0;
+
   for (const line of pricedLines) {
     const baseBody = {
       productId: Number(line.productId),
@@ -328,6 +352,9 @@ export async function addToCart(
       baseBody,
     ];
 
+    let added = false;
+    let lastError: string | undefined;
+
     for (const body of attempts) {
       try {
         await ecwidFetch(
@@ -339,15 +366,23 @@ export async function addToCart(
             body: JSON.stringify(body),
           },
         );
+        added = true;
         addedCount += 1;
         break;
-      } catch {
-        /* try next payload shape */
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : 'Ecwid cart add failed';
       }
     }
+
+    lineResults.push({
+      productId: line.productId,
+      variantId: line.variantId,
+      added,
+      error: added ? undefined : lastError,
+    });
   }
 
-  return { cartId, lines: pricedLines, addedCount };
+  return { cartId, lines: pricedLines, addedCount, lineResults };
 }
 
 export async function updateCartLine(
@@ -378,6 +413,17 @@ export async function removeCartLine(
 
 export async function getStoreProfile(tokens: EcwidStoreTokens): Promise<Record<string, unknown>> {
   return ecwidFetch(tokens.storeId, tokens.accessToken, '/profile');
+}
+
+export async function getOrder(
+  tokens: EcwidStoreTokens,
+  orderId: string,
+): Promise<Record<string, unknown>> {
+  return ecwidFetch(
+    tokens.storeId,
+    tokens.accessToken,
+    `/orders/${encodeURIComponent(orderId)}`,
+  );
 }
 
 export async function searchProductsByIds(

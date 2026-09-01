@@ -1,8 +1,18 @@
 import type { DiscountType, TierDiscountType, VolumeTier } from './types.js';
 
-export function formatMoney(amount: number): string {
-  const safe = Number.isFinite(amount) ? amount : 0;
-  return `$${safe.toFixed(2)}`;
+export function formatMoney(amount: number | null | undefined, currency = 'USD'): string {
+  if (amount == null || Number.isNaN(amount)) return '';
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    const safe = Number.isFinite(amount) ? amount : 0;
+    return `$${safe.toFixed(2)}`;
+  }
 }
 
 export function clampDiscountValue(type: DiscountType, value: number): number {

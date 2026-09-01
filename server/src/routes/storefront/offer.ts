@@ -1,19 +1,14 @@
 import { Router } from 'express';
-import { isRuleType } from '@pb/shared';
-import { listActiveRulesForStore } from '../../lib/db/rules.js';
-import {
-  listActiveRulesFromEmbeddedPublicConfig,
-  listActiveRulesFromPublicConfig,
-} from '../../lib/db/public-rules.js';
 import { incrementMonthlyViews } from '../../lib/db/settings.js';
 import { buildStorefrontWidgetViews } from '../../lib/build-widget-view.js';
 import { serializeWidgetView } from '../../lib/serialize-widget-view.js';
 import { getStoreProfile } from '../../lib/ecwid.js';
 import { CLIENT_ERRORS, corsHeaders, failResponse, jsonResponse } from '../../lib/api-response.js';
+import { resolveRules } from '../../lib/storefront-rules.js';
 import { getOAuthTokens } from '../../lib/storage/oauth-cache.js';
 import { resolveStorefrontTokens } from '../../lib/storefront-tokens.js';
 import { requireStoreId } from '../../lib/store-context.js';
-import type { RuleType } from '@pb/shared';
+import { parseOfferBody } from '../../lib/validate-body.js';
 
 export const offerRouter = Router();
 
@@ -27,20 +22,11 @@ async function handleOffer(
 ): Promise<void> {
   try {
     const storeId = requireStoreId(req);
-    const body = (req.body ?? {}) as Record<string, unknown>;
-    const productId = String(req.query.productId ?? body.productId ?? '').trim();
-    const ruleId = String(req.query.ruleId ?? body.ruleId ?? '').trim() || undefined;
-    const ruleTypeRaw = req.query.ruleType ?? body.ruleType;
-    const ruleType =
-      typeof ruleTypeRaw === 'string' && isRuleType(ruleTypeRaw)
-        ? (ruleTypeRaw as RuleType)
-        : undefined;
-    const embeddedPublicConfig = body.publicConfig;
+    // The route serves GET as well, where every param arrives as a query string.
+    const parsed = parseOfferBody({ ...req.query, ...(req.body as object | undefined) });
+    if (!parsed.ok) return failResponse(res, req, parsed.error, 400);
 
-    if (!productId) return failResponse(res, req, 'productId is required', 400);
-    if (ruleTypeRaw && !ruleType) return failResponse(res, req, 'Invalid ruleType', 400);
-
-    const publicToken = String(req.query.publicToken ?? body.publicToken ?? '').trim();
+    const { productId, ruleId, ruleType, publicToken } = parsed.data;
     const cachedPrivate = await getOAuthTokens(storeId);
     const tokens = await resolveStorefrontTokens(storeId, publicToken || undefined);
     if (!tokens) {
@@ -52,46 +38,26 @@ async function handleOffer(
     let overViewLimit = false;
     if (!ruleId && cachedPrivate?.accessToken) {
       try {
-        await incrementMonthlyViews(storeId);
+        const settings = await incrementMonthlyViews(storeId);
+        overViewLimit = settings.currentViewsCount > settings.monthlyViewsLimit;
       } catch (err) {
         console.warn('[pb-offer] incrementMonthlyViews failed', err);
       }
     }
 
-    let rules: Awaited<ReturnType<typeof listActiveRulesForStore>> = [];
-    if (cachedPrivate?.accessToken) {
-      try {
-        rules = await listActiveRulesForStore(storeId, ruleType);
-      } catch (err) {
-        console.warn('[pb-offer] listActiveRulesForStore failed', err);
-      }
-    }
-    if (rules.length === 0) {
-      try {
-        rules = await listActiveRulesFromPublicConfig(tokens);
-      } catch (err) {
-        console.warn('[pb-offer] listActiveRulesFromPublicConfig failed', err);
-      }
-    }
-    if (rules.length === 0 && embeddedPublicConfig) {
-      rules = listActiveRulesFromEmbeddedPublicConfig(embeddedPublicConfig);
-    }
-
-    if (ruleType) {
-      rules = rules.filter((r) => r.ruleType === ruleType);
-    }
-    if (ruleId) {
-      rules = rules.filter((r) => r.id === ruleId);
-    } else {
-      rules = rules.filter((r) => r.ruleType !== 'CART_UPSELL');
-    }
+    const { rules } = await resolveRules({
+      storeId,
+      tokens,
+      ruleType,
+      ruleId,
+      excludeCartUpsell: !ruleId,
+    });
 
     const views = await buildStorefrontWidgetViews(tokens, rules, productId, overViewLimit);
     if (views.length === 0) {
       console.warn('[pb-offer] No widget views for product', storeId, productId, {
         ruleCount: rules.length,
         hasPublicToken: Boolean(publicToken),
-        hasEmbeddedConfig: Boolean(embeddedPublicConfig),
       });
       res.status(204).set(corsHeaders(req)).end();
       return;

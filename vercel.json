@@ -6,7 +6,7 @@
   "outputDirectory": "public",
   "functions": {
     "api/index.ts": {
-      "includeFiles": "admin/dist/**,storefront/dist/**,app.manifest.json,.env,server/.env,server/dist/**"
+      "includeFiles": ".env,server/.env,admin/dist/**,storefront/dist/**,app.manifest.json,server/dist/**"
     }
   },
   "rewrites": [

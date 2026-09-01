@@ -193,6 +193,7 @@
   padding: 0.75rem;
   cursor: pointer;
   background: var(--pb-offer-card-bg, #fff);
+  position: relative;
 }
 
 .pb-volume__tier--selected {
@@ -202,8 +203,33 @@
 
 .pb-volume__tier input {
   position: absolute;
-  opacity: 0;
-  pointer-events: none;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Fallback: the image is only rendered when the tier has one, so the title is styled too. */
+.pb-volume__tier input:focus-visible + .pb-volume__tier-img,
+.pb-volume__tier input:focus-visible ~ .pb-volume__tier-title {
+  outline: 2px solid var(--pb-offer-selected-border, #2563eb);
+  outline-offset: 2px;
+}
+
+@supports selector(:has(*)) {
+  .pb-volume__tier input:focus-visible + .pb-volume__tier-img,
+  .pb-volume__tier input:focus-visible ~ .pb-volume__tier-title {
+    outline: none;
+  }
+
+  .pb-volume__tier:has(input:focus-visible) {
+    outline: 2px solid var(--pb-offer-selected-border, #2563eb);
+    outline-offset: 2px;
+  }
 }
 
 .pb-volume__tier-title {
@@ -323,8 +349,10 @@
 }
 
 .pb-qty-stepper__btn {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   border: 0;
   background: #f9fafb;
   cursor: pointer;
@@ -332,11 +360,24 @@
 }
 
 .pb-qty-stepper__input {
-  width: 42px;
-  height: 32px;
+  width: 48px;
+  height: 44px;
+  min-height: 44px;
   border: 0;
   border-left: 1px solid #d1d5db;
   border-right: 1px solid #d1d5db;
   text-align: center;
   font-size: 14px;
+}
+
+.pb-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

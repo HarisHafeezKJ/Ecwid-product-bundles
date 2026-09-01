@@ -7,11 +7,14 @@ import {
   createShellState,
   mountWidgetShell,
   setAddingState,
+  showAtcSuccess,
   showWidgetError,
+  clearWidgetError,
+  validateWidgetBeforeAtc,
   type WidgetShellState,
 } from './widget-shell';
 import { applyWidgetStyle } from './widget-style-css';
-import { qs, qsa } from '../utils';
+import { asCopyText, qs, qsa } from '../utils';
 
 export function renderVolumeOffer(container: HTMLElement, view: StorefrontWidgetView): void {
   const state = createShellState(view);
@@ -65,20 +68,31 @@ async function handleVolumeAtc(
   container: HTMLElement,
 ): Promise<void> {
   if (state.adding) return;
+  clearWidgetError(root);
+  const lines = collectVolumeLines(state.view, state.volumeQty, state.variantSelections);
+  const validationError = validateWidgetBeforeAtc(state, lines);
+  if (validationError) {
+    showWidgetError(root, validationError);
+    return;
+  }
+
   state.adding = true;
   setAddingState(root, true, state.view);
   try {
-    const lines = collectVolumeLines(state.view, state.volumeQty, state.variantSelections);
     await addDiscountedAndRefresh(state.view.ruleId, lines);
+    showAtcSuccess(root, state);
   } catch (err) {
     const msg =
       err instanceof Error
         ? err.message
-        : state.view.widgetStyle.addToCartErrorText ?? 'Could not add to cart.';
+        : asCopyText(state.view.widgetStyle.addToCartErrorText, 'Could not add to cart.');
     showWidgetError(root, msg);
   } finally {
     state.adding = false;
-    setAddingState(root, false, state.view);
+    const btn = root.querySelector<HTMLButtonElement>('[data-pb-atc]');
+    if (btn && !btn.classList.contains('pb-btn--success')) {
+      setAddingState(root, false, state.view);
+    }
   }
 }
 

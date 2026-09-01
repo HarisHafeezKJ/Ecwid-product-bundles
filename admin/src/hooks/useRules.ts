@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { AppSettings, BundleRule, RuleStatus } from '@pb/shared';
 import * as api from '../api/client';
 
@@ -22,10 +22,6 @@ export function useRules() {
       setLoading(false);
     }
   }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
 
   const removeRule = useCallback(async (id: string) => {
     setMutating(true);

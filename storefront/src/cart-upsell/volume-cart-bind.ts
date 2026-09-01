@@ -1,28 +1,8 @@
 import { syncVolumeCart } from '../api';
 import { cartIdFrom, cartLineSnapshots, getCart, refreshCart } from '../ecwid';
-import { debounce } from '../utils';
+import { CartSyncController } from '../cart-sync-controller';
 
-let started = false;
-let observer: MutationObserver | null = null;
-
-const debouncedSync = debounce(() => void runVolumeSync(), 400);
-
-export function startVolumeCartSync(): void {
-  if (started) return;
-  started = true;
-
-  document.addEventListener('change', onQtyChange, true);
-  document.addEventListener('input', onQtyChange, true);
-  document.addEventListener('focusin', () => debouncedSync());
-  document.addEventListener('pb-cart-changed', () => debouncedSync());
-  window.addEventListener('pageshow', () => debouncedSync());
-
-  observer = new MutationObserver(() => debouncedSync());
-  observer.observe(document.body, { childList: true, subtree: true });
-
-  window.setInterval(() => void runVolumeSync(), 12000);
-  void runVolumeSync();
-}
+let controller: CartSyncController | null = null;
 
 async function runVolumeSync(): Promise<void> {
   try {
@@ -41,20 +21,17 @@ async function runVolumeSync(): Promise<void> {
   }
 }
 
-function onQtyChange(event: Event): void {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) return;
-  if (
-    target.matches(
-      'input[type="number"], .ec-cart__qty input, .ecwid-productBrowser-cart-qty, [data-hook="cart-item-qty"]',
-    )
-  ) {
-    debouncedSync();
+export function startVolumeCartSync(): void {
+  if (!controller) {
+    controller = new CartSyncController({
+      intervalMs: 12000,
+      onSync: runVolumeSync,
+    });
   }
+  controller.start();
 }
 
 export function stopVolumeCartSync(): void {
-  started = false;
-  observer?.disconnect();
-  observer = null;
+  controller?.stop();
+  controller = null;
 }

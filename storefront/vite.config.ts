@@ -2,6 +2,11 @@ import { defineConfig } from 'vite';
 import { resolve } from 'node:path';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@pb/shared': resolve(__dirname, '../packages/shared/src/index.ts'),
+    },
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
