@@ -13,10 +13,20 @@ import { mapStoredRule, ruleInputFromBody, type StoredRuleRow, type StoredRulesD
 
 const EMPTY_IDS: string[] = [];
 
+function normalizeRulesDoc(raw: unknown): StoredRulesDoc {
+  if (!raw) return { rules: [] };
+  // Legacy / corrupted storage may be a bare array of rules instead of { rules: [] }.
+  if (Array.isArray(raw)) return { rules: raw as StoredRuleRow[] };
+  if (typeof raw === 'object' && Array.isArray((raw as StoredRulesDoc).rules)) {
+    return raw as StoredRulesDoc;
+  }
+  return { rules: [] };
+}
+
 async function loadRulesDoc(storeId: string, sessionAccessToken?: string): Promise<StoredRulesDoc> {
   const tokens = await resolveStoreTokens(storeId, sessionAccessToken);
-  const doc = await readStorageJson<StoredRulesDoc>(tokens, storageKeys().rules);
-  return doc ?? { rules: [] };
+  const doc = await readStorageJson<unknown>(tokens, storageKeys().rules);
+  return normalizeRulesDoc(doc);
 }
 
 async function saveRulesDoc(
