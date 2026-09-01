@@ -4,9 +4,9 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { corsHeaders, isAllowedOrigin, jsonResponse } from './lib/api-response.js';
-import { getAdminDistPath, getManifest, getPort, getStorefrontDistPath, loadEnvFiles } from './lib/config.js';
+import { getAdminDistPath, getEcwidClientSecret, getManifest, getPort, getStorefrontDistPath, loadEnvFiles } from './lib/config.js';
 import { sessionMiddleware, persistStoreAuth, setSession } from './lib/auth.js';
-import { getEcwidClientSecret } from './lib/config.js';
+import { buildEcwidAdminHtml } from './lib/admin-html.js';
 import { decryptEcwidPayload } from './lib/ecwid-payload.js';
 import { authRouter } from './routes/auth.js';
 import { rulesRouter } from './routes/dashboard/rules.js';
@@ -84,15 +84,13 @@ async function serveAdminEntry(
       const storeId = String(decoded.store_id);
       await persistStoreAuth(storeId, decoded.access_token, decoded.public_token);
       const sessionToken = setSession(res, storeId, decoded.access_token);
-      const params = new URLSearchParams();
-      if (typeof req.query.lang === 'string' && req.query.lang) {
-        params.set('lang', req.query.lang);
-      }
-      params.set('bootstrap', sessionToken);
       // #region agent log
-      fetch('http://127.0.0.1:7627/ingest/17a22ea5-cb1e-474a-bba3-194752c05bb0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c36960'},body:JSON.stringify({sessionId:'c36960',location:'server/src/index.ts:admin-entry',message:'Ecwid payload decrypted; redirecting to clean admin URL',data:{storeId,lang:decoded.lang},timestamp:Date.now(),hypothesisId:'K',runId:'post-fix'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7627/ingest/17a22ea5-cb1e-474a-bba3-194752c05bb0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c36960'},body:JSON.stringify({sessionId:'c36960',location:'server/src/index.ts:admin-entry',message:'Ecwid payload decrypted; serving 200 with EcwidApp.init injection',data:{storeId,lang:decoded.lang,inIframe:req.headers['sec-fetch-dest']==='iframe'},timestamp:Date.now(),hypothesisId:'L',runId:'post-fix-2'})}).catch(()=>{});
       // #endregion
-      res.redirect(302, `${manifest.paths.adminMount}?${params.toString()}`);
+      res
+        .status(200)
+        .type('html')
+        .send(buildEcwidAdminHtml(adminDistPath, { bootstrapToken: sessionToken }));
       return;
     } catch (err) {
       console.error('Ecwid iframe payload auth failed', err);
@@ -101,7 +99,7 @@ async function serveAdminEntry(
     }
   }
 
-  res.sendFile(path.join(adminDistPath, 'index.html'));
+  res.status(200).type('html').send(buildEcwidAdminHtml(adminDistPath));
 }
 
 app.get(manifest.paths.adminMount, (req, res) => {
