@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { getBundleRule } from '../../lib/db/rules.js';
 import { addToCart } from '../../lib/ecwid.js';
+import { pricedLinesToEcwidCartLines } from '../../lib/ecwid-cart-lines.js';
 import { priceLinesForRule } from '../../lib/price-lines-for-rule.js';
 import { CLIENT_ERRORS, corsHeaders, failResponse, jsonResponse } from '../../lib/api-response.js';
-import { getStoreTokens } from '../../lib/auth.js';
+import { resolveStorefrontTokens } from '../../lib/storefront-tokens.js';
 import { requireStoreId } from '../../lib/store-context.js';
 
 export const addDiscountedRouter = Router();
@@ -22,7 +23,10 @@ addDiscountedRouter.post('/', async (req, res) => {
     if (!ruleId) return failResponse(res, req, 'ruleId is required', 400);
     if (lines.length === 0) return failResponse(res, req, 'lines are required', 400);
 
-    const tokens = await getStoreTokens(storeId);
+    const tokens = await resolveStorefrontTokens(
+      storeId,
+      String(req.body?.publicToken ?? req.query.publicToken ?? '').trim() || undefined,
+    );
     if (!tokens) return failResponse(res, req, 'Store not found', 404);
 
     const rule = await getBundleRule(storeId, ruleId);
@@ -47,10 +51,13 @@ addDiscountedRouter.post('/', async (req, res) => {
       })),
     );
 
+    const ecwidLines = pricedLinesToEcwidCartLines(priced);
+
     jsonResponse(res, req, {
       ok: true,
       cartId: result.cartId,
       lines: priced,
+      ecwidLines,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Could not add to cart';

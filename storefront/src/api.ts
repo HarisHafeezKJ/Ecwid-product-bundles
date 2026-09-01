@@ -64,6 +64,7 @@ export async function fetchOffer(params: {
 
 export async function addDiscounted(body: AddDiscountedRequest): Promise<AddDiscountedResponse> {
   const storeId = getStoreId();
+  const publicToken = await getPublicToken();
   const res = await fetch(storefrontUrl('/add-discounted'), {
     method: 'POST',
     credentials: 'include',
@@ -71,9 +72,22 @@ export async function addDiscounted(body: AddDiscountedRequest): Promise<AddDisc
       Accept: 'application/json',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ ...body, storeId }),
+    body: JSON.stringify({
+      ...body,
+      storeId,
+      publicToken: publicToken ?? undefined,
+    }),
   });
-  const data = await parseJson<AddDiscountedResponse>(res);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    try {
+      const data = JSON.parse(text) as { error?: string };
+      throw new Error(data.error || text || `Request failed (${res.status})`);
+    } catch {
+      throw new Error(text || `Request failed (${res.status})`);
+    }
+  }
+  const data = (await res.json()) as AddDiscountedResponse;
   if (!data?.ok) throw new Error('Could not add to cart.');
   return data;
 }

@@ -2,9 +2,11 @@ import type { StorefrontWidgetView, WidgetProductItem } from '../types';
 import { addDiscounted } from '../api';
 import { cartIdFrom, getCart, refreshCart } from '../ecwid';
 import { getEcwid } from '../ecwid';
-import type { EcwidCartLinePayload } from '../types';
+import type { EcwidCartLinePayload, EcwidAddProductPayload, PricedLineResponse } from '../types';
 import { qs } from '../utils';
 import { applyWidgetStyle } from './widget-style-css';
+
+const PB_STAMP_KEYS = new Set(['pbOfferId', 'pbDealId', 'pbKind']);
 
 export interface WidgetShellState {
   view: StorefrontWidgetView;
@@ -65,24 +67,85 @@ export async function addDiscountedAndRefresh(
   const cartId = cartIdFrom(cart);
   const result = await addDiscounted({ ruleId, lines, cartId });
 
-  if (result.ecwidLines?.length) {
-    await addEcwidLines(result.ecwidLines);
+  const ecwidLines =
+    result.ecwidLines?.length
+      ? result.ecwidLines
+      : pricedLinesToEcwidLines(result.lines ?? []);
+
+  if (!ecwidLines.length) {
+    throw new Error('Could not add to cart.');
   }
+
+  await addEcwidLines(ecwidLines);
   await refreshCart();
+}
+
+function pricedLinesToEcwidLines(lines: PricedLineResponse[]): EcwidCartLinePayload[] {
+  return lines.map((line) => ({
+    productId: Number(line.productId),
+    quantity: line.quantity,
+    ...(line.options && Object.keys(line.options).length > 0 ? { options: line.options } : {}),
+    selectedPrice: line.unitPrice,
+  }));
+}
+
+function stripStampOptions(options?: Record<string, string>): Record<string, string> | undefined {
+  if (!options) return undefined;
+  const stripped: Record<string, string> = {};
+  for (const [key, value] of Object.entries(options)) {
+    if (!PB_STAMP_KEYS.has(key)) stripped[key] = value;
+  }
+  return Object.keys(stripped).length > 0 ? stripped : undefined;
+}
+
+function toEcwidAddPayload(line: EcwidCartLinePayload): EcwidAddProductPayload {
+  return {
+    id: line.productId,
+    quantity: line.quantity,
+    ...(line.options ? { options: line.options } : {}),
+    ...(line.selectedPrice != null ? { selectedPrice: line.selectedPrice } : {}),
+  };
 }
 
 async function addEcwidLines(lines: EcwidCartLinePayload[]): Promise<void> {
   const cartApi = getEcwid()?.Cart;
-  if (!cartApi?.addProduct) return;
-
-  for (const line of lines) {
-    await new Promise<void>((resolve) => {
-      cartApi.addProduct!(line, (success) => {
-        if (!success) console.warn('[pb-bundles] Ecwid addProduct failed', line);
-        resolve();
-      });
-    });
+  if (!cartApi?.addProduct) {
+    throw new Error('Ecwid cart is not available.');
   }
+
+  let addedCount = 0;
+  for (const line of lines) {
+    let added = await tryAddEcwidLine(cartApi, line);
+    if (!added && line.options) {
+      const withoutStamp = stripStampOptions(line.options);
+      if (withoutStamp && Object.keys(withoutStamp).length > 0) {
+        added = await tryAddEcwidLine(cartApi, { ...line, options: withoutStamp });
+      }
+      if (!added) {
+        added = await tryAddEcwidLine(cartApi, { ...line, options: undefined });
+      }
+    }
+    if (added) addedCount += 1;
+  }
+
+  if (addedCount === 0) {
+    throw new Error('Could not add to cart.');
+  }
+}
+
+async function tryAddEcwidLine(
+  cartApi: NonNullable<NonNullable<ReturnType<typeof getEcwid>>['Cart']>,
+  line: EcwidCartLinePayload,
+): Promise<boolean> {
+  const payload = toEcwidAddPayload(line);
+  return new Promise((resolve) => {
+    cartApi.addProduct!(payload, (success, _product, _cart, error) => {
+      if (!success) {
+        console.warn('[pb-bundles] Ecwid addProduct failed', payload, error);
+      }
+      resolve(success);
+    });
+  });
 }
 
 export function showWidgetError(root: HTMLElement, message: string): void {

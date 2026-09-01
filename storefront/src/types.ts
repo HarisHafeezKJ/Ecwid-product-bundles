@@ -109,7 +109,24 @@ export interface AddDiscountedRequest {
 export interface AddDiscountedResponse {
   ok: boolean;
   cartId?: string;
+  lines?: PricedLineResponse[];
   ecwidLines?: EcwidCartLinePayload[];
+}
+
+export interface PricedLineResponse {
+  productId: string;
+  variantId?: string;
+  quantity: number;
+  unitPrice: number;
+  catalogPrice?: number;
+  options?: Record<string, string>;
+}
+
+export interface EcwidAddProductPayload {
+  id: number;
+  quantity: number;
+  options?: Record<string, string>;
+  selectedPrice?: number;
 }
 
 export interface EcwidCartLinePayload {
@@ -180,7 +197,7 @@ export interface EcwidApi {
   Cart?: {
     get?: (cb: (cart: EcwidCart) => void) => void;
     addProduct?: (
-      product: EcwidCartLinePayload | number,
+      product: EcwidAddProductPayload | EcwidCartLinePayload | number,
       callback?: (
         success: boolean,
         product: unknown,
