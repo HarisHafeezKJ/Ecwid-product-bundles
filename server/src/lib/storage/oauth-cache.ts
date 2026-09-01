@@ -127,3 +127,10 @@ export async function refreshOAuthFromStorage(storeId: string): Promise<EcwidSto
 
   return tokens;
 }
+
+/** Storefront APIs: memory/file cache, then Ecwid storage refresh. */
+export async function ensureStoreTokens(storeId: string): Promise<EcwidStoreTokens | null> {
+  const cached = await getOAuthTokens(storeId);
+  if (cached?.accessToken) return cached;
+  return refreshOAuthFromStorage(storeId);
+}

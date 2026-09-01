@@ -22,7 +22,7 @@ export async function initProductWidgets(page?: EcwidPage): Promise<void> {
   if (productIdNum == null) return;
 
   const productId = String(productIdNum);
-  if (productId === lastProductId) return;
+  if (productId === lastProductId && document.getElementById(MOUNT_ID)?.children.length) return;
   lastProductId = productId;
 
   const host = ensureProductHost();

@@ -31,8 +31,17 @@ export function ruleShowsOnProductPage(
 
   if (rule.ruleType === 'MIX_AND_MATCH' || rule.ruleType === 'VOLUME_DISCOUNT') {
     const pool = mixPoolProductIds(rule, collectionProductIds);
-    return pool.includes(productId) || productId === rule.targetProductId;
+    return (
+      pool.some((id) => String(id) === String(productId)) ||
+      String(rule.targetProductId ?? '') === String(productId) ||
+      String(rule.primaryProductId ?? '') === String(productId)
+    );
   }
 
-  return productId === rule.targetProductId;
+  if (rule.ruleType === 'FIXED_BUNDLE') {
+    const target = rule.targetProductId ?? rule.primaryProductId;
+    return String(target ?? '') === String(productId);
+  }
+
+  return String(rule.targetProductId ?? '') === String(productId);
 }

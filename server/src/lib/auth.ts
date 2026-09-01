@@ -15,6 +15,7 @@ import {
   hydrateOAuthCache,
   persistOAuthTokens,
   refreshOAuthFromStorage,
+  ensureStoreTokens,
 } from './storage/oauth-cache.js';
 
 loadEnvFiles();
@@ -173,9 +174,7 @@ export async function persistStoreAuth(
 }
 
 export async function getStoreTokens(storeId: string): Promise<EcwidStoreTokens | null> {
-  const cached = await getOAuthTokens(storeId);
-  if (cached) return cached;
-  return refreshOAuthFromStorage(storeId);
+  return ensureStoreTokens(storeId);
 }
 
 export function requireDashboardAuth(req: Request, res: Response, next: NextFunction): void {

@@ -3,6 +3,8 @@ import { isRuleType } from '@pb/shared';
 import { listActiveRulesForStore } from '../../lib/db/rules.js';
 import { incrementMonthlyViews } from '../../lib/db/settings.js';
 import { buildStorefrontWidgetViews } from '../../lib/build-widget-view.js';
+import { serializeWidgetView } from '../../lib/serialize-widget-view.js';
+import { getStoreProfile } from '../../lib/ecwid.js';
 import { CLIENT_ERRORS, corsHeaders, failResponse, jsonResponse } from '../../lib/api-response.js';
 import { getStoreTokens } from '../../lib/auth.js';
 import { requireStoreId } from '../../lib/store-context.js';
@@ -29,7 +31,10 @@ offerRouter.get('/', async (req, res) => {
     if (ruleTypeRaw && !ruleType) return failResponse(res, req, 'Invalid ruleType', 400);
 
     const tokens = await getStoreTokens(storeId);
-    if (!tokens) return res.status(204).set(corsHeaders(req)).end();
+    if (!tokens) {
+      console.warn('[pb-offer] No OAuth tokens for store', storeId);
+      return res.status(204).set(corsHeaders(req)).end();
+    }
 
     let overViewLimit = false;
     if (!ruleId) {
@@ -49,10 +54,20 @@ offerRouter.get('/', async (req, res) => {
     const views = await buildStorefrontWidgetViews(tokens, rules, productId, overViewLimit);
     if (views.length === 0) return res.status(204).set(corsHeaders(req)).end();
 
+    let currency = 'USD';
+    try {
+      const profile = await getStoreProfile(tokens);
+      const raw = profile.formatsAndUnits as { currency?: string } | undefined;
+      if (raw?.currency) currency = String(raw.currency);
+    } catch {
+      /* optional */
+    }
+
+    const serialized = views.map((view) => serializeWidgetView(view, currency));
     const payload =
-      views.length === 1
-        ? { view: views[0], views }
-        : { views, view: views[0] };
+      serialized.length === 1
+        ? { view: serialized[0], views: serialized }
+        : { views: serialized, view: serialized[0] };
 
     jsonResponse(res, req, payload);
   } catch (err) {

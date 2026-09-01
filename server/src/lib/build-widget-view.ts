@@ -107,6 +107,12 @@ export async function buildWidgetViewForRule(
   const products = (await getProducts(tokens, productIds)).filter(productInStock);
   if (products.length === 0) return null;
 
+  if (rule.ruleType === 'FIXED_BUNDLE') {
+    const requiredIds = items.map((item) => item.productId).filter(Boolean);
+    const loadedIds = new Set(products.map((product) => product.id));
+    if (!requiredIds.every((id) => loadedIds.has(id))) return null;
+  }
+
   let totals = { original: 0, discounted: 0 };
   if (rule.ruleType === 'FIXED_BUNDLE') totals = totalsForBundle(rule, products);
   if (rule.ruleType === 'VOLUME_DISCOUNT') totals = totalsForVolume(rule, products);
