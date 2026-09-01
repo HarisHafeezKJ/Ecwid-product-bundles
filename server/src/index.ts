@@ -5,7 +5,9 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { corsHeaders, isAllowedOrigin, jsonResponse } from './lib/api-response.js';
 import { getAdminDistPath, getManifest, getPort, getStorefrontDistPath, loadEnvFiles } from './lib/config.js';
-import { sessionMiddleware } from './lib/auth.js';
+import { sessionMiddleware, persistStoreAuth, setSession } from './lib/auth.js';
+import { getEcwidClientSecret } from './lib/config.js';
+import { decryptEcwidPayload } from './lib/ecwid-payload.js';
 import { authRouter } from './routes/auth.js';
 import { rulesRouter } from './routes/dashboard/rules.js';
 import { settingsRouter } from './routes/dashboard/settings.js';
@@ -69,15 +71,48 @@ app.use('/api/storefront/sync-volume-cart', syncVolumeCartRouter);
 app.use('/api/webhooks/orders', ordersWebhookRouter);
 
 const adminDistPath = adminDist;
-app.get(manifest.paths.adminMount, (_req, res) => {
+
+async function serveAdminEntry(
+  req: express.Request,
+  res: express.Response,
+): Promise<void> {
+  const encrypted =
+    typeof req.query.payload === 'string' ? req.query.payload.trim() : '';
+  if (encrypted) {
+    try {
+      const decoded = decryptEcwidPayload(encrypted, getEcwidClientSecret());
+      const storeId = String(decoded.store_id);
+      await persistStoreAuth(storeId, decoded.access_token, decoded.public_token);
+      const sessionToken = setSession(res, storeId, decoded.access_token);
+      const params = new URLSearchParams();
+      if (typeof req.query.lang === 'string' && req.query.lang) {
+        params.set('lang', req.query.lang);
+      }
+      params.set('bootstrap', sessionToken);
+      // #region agent log
+      fetch('http://127.0.0.1:7627/ingest/17a22ea5-cb1e-474a-bba3-194752c05bb0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c36960'},body:JSON.stringify({sessionId:'c36960',location:'server/src/index.ts:admin-entry',message:'Ecwid payload decrypted; redirecting to clean admin URL',data:{storeId,lang:decoded.lang},timestamp:Date.now(),hypothesisId:'K',runId:'post-fix'})}).catch(()=>{});
+      // #endregion
+      res.redirect(302, `${manifest.paths.adminMount}?${params.toString()}`);
+      return;
+    } catch (err) {
+      console.error('Ecwid iframe payload auth failed', err);
+      res.status(401).type('html').send('Unable to authenticate this Ecwid app session.');
+      return;
+    }
+  }
+
   res.sendFile(path.join(adminDistPath, 'index.html'));
+}
+
+app.get(manifest.paths.adminMount, (req, res) => {
+  void serveAdminEntry(req, res);
 });
 app.get(`${manifest.paths.adminMount}/*`, (req, res, next) => {
   if (req.path.includes('/assets/')) {
     next();
     return;
   }
-  res.sendFile(path.join(adminDistPath, 'index.html'));
+  void serveAdminEntry(req, res);
 });
 
 app.get('/', (_req, res) => {

@@ -1,4 +1,5 @@
 const SESSION_STORAGE_KEY = 'pb_session_bootstrap';
+const ECWID_SDK_URL = 'https://djqizrxa6f10j.cloudfront.net/ecwid-sdk/js/1.3.0/ecwid-app.js';
 
 type EcwidAppGlobal = {
   EcwidApp?: {
@@ -18,18 +19,6 @@ export function captureSessionBootstrapFromUrl(): void {
   window.history.replaceState({}, '', nextUrl);
 }
 
-/** Request Storage Access API when embedded in Ecwid admin (Chrome third-party cookie policy). */
-export async function requestEmbeddedStorageAccess(): Promise<void> {
-  if (window.self === window.top) return;
-  const doc = document as Document & { requestStorageAccess?: () => Promise<void> };
-  if (typeof doc.requestStorageAccess !== 'function') return;
-  try {
-    await doc.requestStorageAccess();
-  } catch {
-    // Fall back to Authorization header bootstrap token.
-  }
-}
-
 export function dashboardAuthHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -40,34 +29,25 @@ export function dashboardAuthHeaders(): Record<string, string> {
   return headers;
 }
 
-async function authenticateEcwidPayload(): Promise<boolean> {
-  const params = new URLSearchParams(window.location.search);
-  const payload = params.get('payload')?.trim();
-  if (!payload) return false;
+function loadEcwidSdk(): Promise<void> {
+  const w = window as Window & EcwidAppGlobal;
+  if (w.EcwidApp) return Promise.resolve();
 
-  const res = await fetch('/api/auth/ecwid-payload', {
-    method: 'POST',
-    credentials: 'include',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ payload }),
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = ECWID_SDK_URL;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Ecwid SDK'));
+    document.head.appendChild(script);
   });
-  if (!res.ok) return false;
-
-  const data = (await res.json()) as { bootstrap?: string; clientId?: string };
-  if (data.bootstrap) sessionStorage.setItem(SESSION_STORAGE_KEY, data.bootstrap);
-  if (data.clientId) initEcwidNativeShell(data.clientId);
-
-  params.delete('payload');
-  const query = params.toString();
-  window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
-  return true;
 }
 
-function initEcwidNativeShell(clientId: string): void {
+async function initEcwidNativeShell(clientId: string): Promise<void> {
   if (window.self === window.top) return;
+  await loadEcwidSdk();
   const w = window as Window & EcwidAppGlobal;
-  if (!w.EcwidApp) return;
-  w.EcwidApp.init({
+  w.EcwidApp?.init({
     app_id: clientId,
     autoloadedflag: true,
     autoheight: true,
@@ -76,8 +56,6 @@ function initEcwidNativeShell(clientId: string): void {
 
 export async function checkDashboardSession(): Promise<boolean> {
   captureSessionBootstrapFromUrl();
-  await requestEmbeddedStorageAccess();
-  await authenticateEcwidPayload();
 
   const res = await fetch('/api/auth/session', {
     credentials: 'include',
@@ -85,7 +63,7 @@ export async function checkDashboardSession(): Promise<boolean> {
   });
   const data = (await res.json()) as { authenticated?: boolean; clientId?: string };
   if (data.authenticated && data.clientId) {
-    initEcwidNativeShell(data.clientId);
+    await initEcwidNativeShell(data.clientId);
   }
   return Boolean(data.authenticated);
 }
