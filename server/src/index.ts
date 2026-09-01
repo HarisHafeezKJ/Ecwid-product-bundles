@@ -7,7 +7,11 @@ import { corsHeaders, isAllowedOrigin, jsonResponse } from './lib/api-response.j
 import { getAdminDistPath, getEcwidClientSecret, getManifest, getPort, getStorefrontDistPath, loadEnvFiles } from './lib/config.js';
 import { sessionMiddleware, persistStoreAuth, setSession } from './lib/auth.js';
 import { buildEcwidAdminHtml } from './lib/admin-html.js';
-import { decryptEcwidPayload } from './lib/ecwid-payload.js';
+import {
+  decryptEcwidPayload,
+  describeEcwidPayloadDecryptError,
+  extractEcwidPayloadParam,
+} from './lib/ecwid-payload.js';
 import { authRouter } from './routes/auth.js';
 import { rulesRouter } from './routes/dashboard/rules.js';
 import { settingsRouter } from './routes/dashboard/settings.js';
@@ -76,16 +80,16 @@ async function serveAdminEntry(
   req: express.Request,
   res: express.Response,
 ): Promise<void> {
-  const encrypted =
-    typeof req.query.payload === 'string' ? req.query.payload.trim() : '';
+  const encrypted = extractEcwidPayloadParam(req);
   if (encrypted) {
     try {
-      const decoded = decryptEcwidPayload(encrypted, getEcwidClientSecret());
+      const clientSecret = getEcwidClientSecret();
+      const decoded = decryptEcwidPayload(encrypted, clientSecret);
       const storeId = String(decoded.store_id);
       await persistStoreAuth(storeId, decoded.access_token, decoded.public_token);
       const sessionToken = setSession(res, storeId, decoded.access_token);
       // #region agent log
-      fetch('http://127.0.0.1:7627/ingest/17a22ea5-cb1e-474a-bba3-194752c05bb0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c36960'},body:JSON.stringify({sessionId:'c36960',location:'server/src/index.ts:admin-entry',message:'Ecwid payload decrypted; serving 200 with EcwidApp.init injection',data:{storeId,lang:decoded.lang,inIframe:req.headers['sec-fetch-dest']==='iframe'},timestamp:Date.now(),hypothesisId:'L',runId:'post-fix-2'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7627/ingest/17a22ea5-cb1e-474a-bba3-194752c05bb0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c36960'},body:JSON.stringify({sessionId:'c36960',location:'server/src/index.ts:admin-entry',message:'Ecwid payload decrypted; serving 200 with EcwidApp.init injection',data:{storeId,lang:decoded.lang,inIframe:req.headers['sec-fetch-dest']==='iframe',payloadLen:encrypted.length,secretLen:clientSecret.length},timestamp:Date.now(),hypothesisId:'N',runId:'post-fix-3'})}).catch(()=>{});
       // #endregion
       res
         .status(200)
@@ -93,8 +97,23 @@ async function serveAdminEntry(
         .send(buildEcwidAdminHtml(adminDistPath, { bootstrapToken: sessionToken }));
       return;
     } catch (err) {
-      console.error('Ecwid iframe payload auth failed', err);
-      res.status(401).type('html').send('Unable to authenticate this Ecwid app session.');
+      const reason = describeEcwidPayloadDecryptError(err);
+      console.error('Ecwid iframe payload auth failed', reason, err);
+      // #region agent log
+      fetch('http://127.0.0.1:7627/ingest/17a22ea5-cb1e-474a-bba3-194752c05bb0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c36960'},body:JSON.stringify({sessionId:'c36960',location:'server/src/index.ts:admin-entry-fail',message:'Ecwid payload decrypt failed',data:{reason,payloadLen:encrypted.length,secretLen:getEcwidClientSecret().length,inIframe:req.headers['sec-fetch-dest']==='iframe'},timestamp:Date.now(),hypothesisId:'N',runId:'post-fix-3'})}).catch(()=>{});
+      // #endregion
+      // Still return 200 + EcwidApp.init so Ecwid CP does not show "extension cannot be loaded".
+      res
+        .status(200)
+        .type('html')
+        .send(
+          buildEcwidAdminHtml(adminDistPath, {
+            authError:
+              reason === 'decrypt_bad_key'
+                ? 'Could not decrypt Ecwid payload. Verify ECWID_CLIENT_SECRET in Vercel matches your Ecwid app client_secret exactly.'
+                : 'Could not authenticate this Ecwid session.',
+          }),
+        );
       return;
     }
   }

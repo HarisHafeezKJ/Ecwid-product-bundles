@@ -68,11 +68,11 @@ export function loadEnvFiles(): void {
   if (envLoaded) return;
   const root = getRepoRoot();
   const candidates = [
+    path.join(__dirname, '../../.env'),
+    path.join(process.cwd(), '.env'),
     path.join(root, '.env'),
     path.join(root, 'server', '.env'),
-    path.join(process.cwd(), '.env'),
     path.join(process.cwd(), 'server', '.env'),
-    path.join(__dirname, '../../.env'),
     path.join(__dirname, '../../../.env'),
   ];
   for (const file of candidates) {

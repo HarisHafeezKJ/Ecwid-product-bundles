@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import type { Request } from 'express';
 
 export interface EcwidIframePayload {
   store_id: number;
@@ -9,11 +10,41 @@ export interface EcwidIframePayload {
   app_state?: string;
 }
 
+/** Normalize Ecwid url-safe base64 payload from query strings. */
+export function normalizeEcwidPayloadInput(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  try {
+    return decodeURIComponent(trimmed).replace(/ /g, '+');
+  } catch {
+    return trimmed.replace(/ /g, '+');
+  }
+}
+
+function decodeEcwidPayloadBase64(data: string): Buffer {
+  const base64 = data.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+  return Buffer.from(padded, 'base64');
+}
+
+/** Read `payload` from Express query or raw URL (fallback if the parser corrupts long values). */
+export function extractEcwidPayloadParam(req: Request): string {
+  const fromQuery = req.query.payload;
+  if (typeof fromQuery === 'string') {
+    const normalized = normalizeEcwidPayloadInput(fromQuery);
+    if (normalized) return normalized;
+  }
+
+  const query = req.originalUrl.includes('?') ? req.originalUrl.split('?')[1]! : '';
+  const match = query.match(/(?:^|&)payload=([^&]*)/);
+  if (!match?.[1]) return '';
+  return normalizeEcwidPayloadInput(match[1]);
+}
+
 /** Decrypt Ecwid native-app iframe `payload` query param (AES-128-CBC). */
 export function decryptEcwidPayload(encrypted: string, clientSecret: string): EcwidIframePayload {
   const key = Buffer.from(clientSecret.slice(0, 16), 'utf8');
-  const base64 = encrypted.replace(/-/g, '+').replace(/_/g, '/');
-  const decoded = Buffer.from(base64, 'base64');
+  const decoded = decodeEcwidPayloadBase64(encrypted);
   if (decoded.length <= 16) {
     throw new Error('Ecwid payload is too short');
   }
@@ -29,4 +60,14 @@ export function decryptEcwidPayload(encrypted: string, clientSecret: string): Ec
   }
 
   return parsed;
+}
+
+export function describeEcwidPayloadDecryptError(err: unknown): string {
+  if (err instanceof Error) {
+    if (err.message.includes('bad decrypt') || err.message.includes('wrong final block length')) {
+      return 'decrypt_bad_key';
+    }
+    return err.message;
+  }
+  return 'unknown_decrypt_error';
 }

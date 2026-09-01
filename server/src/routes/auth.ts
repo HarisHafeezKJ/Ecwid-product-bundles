@@ -10,7 +10,7 @@ import {
 } from '../lib/auth.js';
 import { jsonResponse, failResponse } from '../lib/api-response.js';
 import { getEcwidClientId, getEcwidClientSecret, getManifest, getRequestBaseUrl, isProduction } from '../lib/config.js';
-import { decryptEcwidPayload } from '../lib/ecwid-payload.js';
+import { decryptEcwidPayload, normalizeEcwidPayloadInput } from '../lib/ecwid-payload.js';
 
 export const authRouter = Router();
 
@@ -54,7 +54,7 @@ authRouter.get('/session', sessionMiddleware, (req, res) => {
 /** Ecwid native app iframe — decrypt `payload` query param and establish session. */
 authRouter.post('/ecwid-payload', async (req, res) => {
   try {
-    const encrypted = String(req.body?.payload ?? '').trim();
+    const encrypted = normalizeEcwidPayloadInput(String(req.body?.payload ?? ''));
     if (!encrypted) {
       failResponse(res, req, 'Missing payload', 400);
       return;

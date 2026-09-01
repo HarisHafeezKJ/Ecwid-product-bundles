@@ -16,16 +16,19 @@ function readAdminIndexHtml(adminDistPath: string): string {
 /** Inject Ecwid native-app shell scripts required for Control Panel iframe embedding. */
 export function buildEcwidAdminHtml(
   adminDistPath: string,
-  options: { bootstrapToken?: string } = {},
+  options: { bootstrapToken?: string; authError?: string } = {},
 ): string {
   const clientId = getEcwidClientId();
   const html = readAdminIndexHtml(adminDistPath);
   const bootstrapJs = options.bootstrapToken
     ? `sessionStorage.setItem('pb_session_bootstrap',${JSON.stringify(options.bootstrapToken)});`
     : '';
+  const authErrorJs = options.authError
+    ? `sessionStorage.setItem('pb_auth_error',${JSON.stringify(options.authError)});`
+    : '';
   const injection = `
 <script>
-(function(){${bootstrapJs}
+(function(){${bootstrapJs}${authErrorJs}
 var u=new URL(location.href);u.searchParams.delete('payload');u.searchParams.delete('bootstrap');
 history.replaceState({},'',u.pathname+(u.search||''));})();
 </script>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { RuleType } from '@pb/shared';
-import { checkDashboardSession } from './api/session';
+import { checkDashboardSession, consumeServerAuthError } from './api/session';
 import DashboardHome from './pages/DashboardHome';
 import OfferEditor from './pages/OfferEditor';
 import { blankDraft } from './components/editor/editor-draft';
@@ -12,12 +12,22 @@ type View =
 
 function App() {
   const [authReady, setAuthReady] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [view, setView] = useState<View>({ name: 'home' });
   const [listEpoch, setListEpoch] = useState(0);
 
   useEffect(() => {
     void checkDashboardSession().then((authenticated) => {
       if (!authenticated) {
+        const serverError = consumeServerAuthError();
+        if (serverError || window.self !== window.top) {
+          setAuthError(
+            serverError ??
+              'Unable to authenticate inside Ecwid. Check that ECWID_CLIENT_SECRET matches your Ecwid app.',
+          );
+          setAuthReady(true);
+          return;
+        }
         window.location.href = '/api/auth/install';
         return;
       }
@@ -42,6 +52,16 @@ function App() {
     return (
       <div className="app-shell">
         <main className="app-main">Loading…</main>
+      </div>
+    );
+  }
+
+  if (authError) {
+    return (
+      <div className="app-shell">
+        <main className="app-main">
+          <p>{authError}</p>
+        </main>
       </div>
     );
   }
