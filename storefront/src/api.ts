@@ -6,31 +6,13 @@ import type {
   RuleType,
 } from './types';
 import { getPublicToken, getStoreId } from './ecwid';
+import { apiBaseFromScript, findOwnScript } from './script-config';
 
 let apiBaseUrl = '';
 
 export function resolveApiBaseUrl(): string {
   if (apiBaseUrl) return apiBaseUrl;
-  const script =
-    document.currentScript ??
-    [...document.querySelectorAll('script[data-api-url], script[src*="pb-bundles"]')].pop();
-  if (script instanceof HTMLScriptElement) {
-    const attr = script.getAttribute('data-api-url');
-    if (attr) {
-      apiBaseUrl = attr.replace(/\/$/, '');
-      return apiBaseUrl;
-    }
-    if (script.src) {
-      try {
-        const url = new URL(script.src);
-        apiBaseUrl = `${url.origin}/api/storefront`;
-        return apiBaseUrl;
-      } catch {
-        /* fall through */
-      }
-    }
-  }
-  apiBaseUrl = `${window.location.origin}/api/storefront`;
+  apiBaseUrl = apiBaseFromScript(findOwnScript());
   return apiBaseUrl;
 }
 

@@ -15,18 +15,16 @@ import {
 import { initProductWidgets, teardownProductWidgets } from './product-widget';
 import type { EcwidPage } from './types';
 import { injectStyles } from './utils';
+import { apiBaseFromScript, findOwnScript } from './script-config';
 import cartUpsellCss from './styles/cart-upsell.css?inline';
 import widgetCss from './styles/widget.css?inline';
 
 let initialized = false;
 
 function readScriptConfig(): void {
-  const script =
-    document.currentScript ??
-    [...document.querySelectorAll('script[src*="pb-bundles"]')].pop();
-  if (!(script instanceof HTMLScriptElement)) return;
-  const apiUrl = script.getAttribute('data-api-url');
-  if (apiUrl) setApiBaseUrl(apiUrl);
+  const script = findOwnScript();
+  if (!script) return;
+  setApiBaseUrl(apiBaseFromScript(script));
 }
 
 function handlePage(page?: EcwidPage): void {
@@ -49,6 +47,10 @@ function handlePage(page?: EcwidPage): void {
 }
 
 function bootstrap(): void {
+  const win = window as Window & { __PB_LOADED__?: boolean };
+  if (win.__PB_LOADED__) return;
+  win.__PB_LOADED__ = true;
+
   if (initialized) return;
   initialized = true;
 

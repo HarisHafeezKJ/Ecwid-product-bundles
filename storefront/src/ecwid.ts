@@ -7,21 +7,14 @@ import {
   publicTokenFromInitialState,
   storeIdFromHostname,
 } from './instant-site';
+import { appRootFromScript, clientIdFromScript, findOwnScript } from './script-config';
 
 let cachedClientId: string | undefined;
 
 function storefrontConfigUrl(): string {
-  const script =
-    document.currentScript ??
-    [...document.querySelectorAll('script[src*="pb-bundles"]')].pop();
-  if (script instanceof HTMLScriptElement && script.src) {
-    try {
-      return `${new URL(script.src).origin}/api/storefront/config`;
-    } catch {
-      /* fall through */
-    }
-  }
-  return `${window.location.origin}/api/storefront/config`;
+  const script = findOwnScript();
+  const root = appRootFromScript(script);
+  return `${root.replace(/\/$/, '')}/api/storefront/config`;
 }
 
 export function getEcwid(): EcwidApi | undefined {
@@ -177,6 +170,13 @@ export function cartIdFrom(cart: EcwidCart | null): string | undefined {
 
 export async function resolveClientId(): Promise<string | undefined> {
   if (cachedClientId) return cachedClientId;
+
+  const fromScript = clientIdFromScript(findOwnScript());
+  if (fromScript) {
+    cachedClientId = fromScript;
+    return cachedClientId;
+  }
+
   try {
     const res = await fetch(storefrontConfigUrl(), { credentials: 'include' });
     if (!res.ok) return undefined;

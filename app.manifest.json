@@ -15,7 +15,7 @@
     "oauthCallback": "/api/auth/callback",
     "oauthInstall": "/api/auth/install",
     "webhook": "/api/webhooks/orders",
-    "storefrontScript": "/storefront/pb-bundles.js",
+    "storefrontScript": "/storefront.js",
     "storefrontApi": "/api/storefront",
     "dashboardApi": "/api/dashboard",
     "adminMount": "/admin",
