@@ -11,7 +11,7 @@ function productImage(item: WidgetProductItem): string {
   if (!item.imageUrl) {
     return '<div class="pb-product__img pb-product__img--empty" aria-hidden="true"></div>';
   }
-  return `<img class="pb-product__img" src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.name)}" loading="lazy" />`;
+  return `<img class="pb-product__img" src="${escapeHtml(item.imageUrl)}" alt="${escapeHtml(item.name)}" width="72" height="72" loading="lazy" />`;
 }
 
 function variantSelect(
