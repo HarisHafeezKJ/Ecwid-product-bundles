@@ -37,7 +37,7 @@ Register these URLs using your deployed domain (paths from manifest):
 |---------------|---------|
 | **redirectUrl** | `https://your-domain.com/api/auth/callback` |
 | **openAppUrl** | `https://your-domain.com/admin` |
-| **customJsUrl** | `https://your-domain.com/storefront/pb-bundles.js` |
+| **customJsUrl** | `https://your-domain.com/storefront.js` |
 | **webhookUrl** | `https://your-domain.com/api/webhooks/orders` |
 
 Required scopes are listed in `app.manifest.json` → `scopes`.

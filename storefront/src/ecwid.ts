@@ -4,6 +4,7 @@ import {
   instantSiteProductPage,
   isInstantSiteHost,
   productIdFromPageUrl,
+  publicTokenFromInitialState,
   storeIdFromHostname,
 } from './instant-site';
 
@@ -190,6 +191,9 @@ export async function resolveClientId(): Promise<string | undefined> {
 export async function getPublicToken(): Promise<string | undefined> {
   const clientId = await resolveClientId();
   if (!clientId) return undefined;
+
+  const fromState = publicTokenFromInitialState(clientId);
+  if (fromState) return fromState;
 
   const instantSite = getInstantSite();
   if (instantSite?.getAppPublicToken) {

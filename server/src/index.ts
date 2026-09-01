@@ -40,6 +40,9 @@ const apiCors = cors({
 });
 
 // Static assets (admin/storefront) must not fail when Ecwid iframe sends a foreign Origin header.
+app.get('/storefront.js', (_req, res) => {
+  res.sendFile(path.join(storefrontDist, 'storefront.js'));
+});
 app.use('/storefront', express.static(storefrontDist));
 app.use('/admin/assets', express.static(path.join(adminDist, 'assets')));
 

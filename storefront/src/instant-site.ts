@@ -63,3 +63,25 @@ export function getInstantSite(): InstantSiteApi | undefined {
   const win = window as Window & { instantsite?: InstantSiteApi };
   return win.instantsite;
 }
+
+/** Ecwid Instant Site embeds app tokens in `window.initialState` before app JS runs. */
+export function parseInstantSiteInitialState(): {
+  appJsUrls?: string[];
+  appsPublicTokens?: Record<string, string>;
+} | null {
+  const win = window as Window & { initialState?: string };
+  const raw = win.initialState;
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { context?: { appJsUrls?: string[]; appsPublicTokens?: Record<string, string> } };
+    return parsed.context ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function publicTokenFromInitialState(clientId: string): string | undefined {
+  const tokens = parseInstantSiteInitialState()?.appsPublicTokens;
+  const token = tokens?.[clientId];
+  return typeof token === 'string' && token.trim() ? token.trim() : undefined;
+}
