@@ -1,6 +1,7 @@
 import type { EcwidPage, RuleType, StorefrontWidgetView } from './types';
 import { fetchOffer } from './api';
 import { getProductId, productPageLooksLikely } from './ecwid';
+import { debounce } from './utils';
 import { renderBundleOffer } from './widgets/bundle-offer';
 import { renderMixMatchOffer } from './widgets/mix-match-offer';
 import { renderVolumeOffer } from './widgets/volume-offer';
@@ -13,7 +14,22 @@ const RULE_CONTAINERS: Record<RuleType, string> = {
   CART_UPSELL: 'pb-cart-upsell',
 };
 
-let lastProductId: string | undefined;
+let lastRenderedProductId: string | undefined;
+let initInFlight = false;
+let pendingInitPage: EcwidPage | undefined;
+let mountWatcher: MutationObserver | null = null;
+const offerCache = new Map<string, StorefrontWidgetView[]>();
+
+const debouncedRemountCheck = debounce(() => {
+  if (!productPageLooksLikely()) return;
+  const productIdNum = getProductId();
+  if (productIdNum == null) return;
+
+  const host = document.getElementById(MOUNT_ID);
+  if (!host || isHostMisplaced(host)) {
+    void initProductWidgets();
+  }
+}, 400);
 
 export async function initProductWidgets(page?: EcwidPage): Promise<void> {
   if (!productPageLooksLikely(page)) return;
@@ -22,37 +38,82 @@ export async function initProductWidgets(page?: EcwidPage): Promise<void> {
   if (productIdNum == null) return;
 
   const productId = String(productIdNum);
-  if (productId === lastProductId && document.getElementById(MOUNT_ID)?.children.length) {
-    const host = document.getElementById(MOUNT_ID);
-    if (host && !isHostMisplaced(host)) return;
+
+  const existingHost = document.getElementById(MOUNT_ID);
+  if (
+    productId === lastRenderedProductId &&
+    existingHost &&
+    existingHost.children.length > 0 &&
+    !isHostMisplaced(existingHost)
+  ) {
+    return;
   }
-  lastProductId = productId;
 
-  const host = await ensureProductHost();
-  if (!host || host.hidden) return;
-
-  host.innerHTML = '<div class="pb-loading">Loading offers…</div>';
+  if (initInFlight) {
+    pendingInitPage = page;
+    return;
+  }
+  initInFlight = true;
 
   try {
-    const response = await fetchOffer({ productId });
-    const views = normalizeViews(response);
+    const host = await ensureProductHost();
+    if (!host || host.hidden) return;
+
+    host.innerHTML = '<div class="pb-loading">Loading offers…</div>';
+
+    const views = await loadViews(productId);
     if (!views.length) {
       host.innerHTML = '';
       return;
     }
 
     host.innerHTML = '';
+    let mounted = 0;
     for (const view of views) {
       if (view.overViewLimit || view.status === 'DISABLED') continue;
       mountOfferView(host, view);
+      mounted += 1;
     }
+
+    if (mounted === 0) {
+      host.innerHTML = '';
+      return;
+    }
+
+    lastRenderedProductId = productId;
+    startMountWatcher();
   } catch (err) {
     console.warn('[pb-bundles] Failed to load offers', err);
-    host.innerHTML = '';
+    const host = document.getElementById(MOUNT_ID);
+    if (host) host.innerHTML = '';
+  } finally {
+    initInFlight = false;
+    if (pendingInitPage !== undefined) {
+      const nextPage = pendingInitPage;
+      pendingInitPage = undefined;
+      void initProductWidgets(nextPage);
+    }
   }
 }
 
-function normalizeViews(response: { view?: StorefrontWidgetView; views?: StorefrontWidgetView[] } | null): StorefrontWidgetView[] {
+async function loadViews(productId: string): Promise<StorefrontWidgetView[]> {
+  const cached = offerCache.get(productId);
+  if (cached) return cached;
+
+  let response = await fetchOffer({ productId });
+  if (!response) {
+    await new Promise((resolve) => window.setTimeout(resolve, 1500));
+    response = await fetchOffer({ productId });
+  }
+
+  const views = normalizeViews(response);
+  offerCache.set(productId, views);
+  return views;
+}
+
+function normalizeViews(
+  response: { view?: StorefrontWidgetView; views?: StorefrontWidgetView[] } | null,
+): StorefrontWidgetView[] {
   if (!response) return [];
   if (response.views?.length) return response.views;
   if (response.view) return [response.view];
@@ -118,7 +179,9 @@ function findProductMountPoint(): { parent: HTMLElement; before?: Element | null
   return null;
 }
 
-function waitForProductMountPoint(timeoutMs = 8000): Promise<{ parent: HTMLElement; before?: Element | null } | null> {
+function waitForProductMountPoint(
+  timeoutMs = 15000,
+): Promise<{ parent: HTMLElement; before?: Element | null } | null> {
   const existing = findProductMountPoint();
   if (existing) return Promise.resolve(existing);
 
@@ -176,6 +239,17 @@ async function ensureProductHost(): Promise<HTMLElement | null> {
   return host;
 }
 
+function startMountWatcher(): void {
+  if (mountWatcher) return;
+  mountWatcher = new MutationObserver(() => debouncedRemountCheck());
+  mountWatcher.observe(document.body, { childList: true, subtree: true });
+}
+
+function stopMountWatcher(): void {
+  mountWatcher?.disconnect();
+  mountWatcher = null;
+}
+
 function mountOfferView(host: HTMLElement, view: StorefrontWidgetView): void {
   const containerId = RULE_CONTAINERS[view.ruleType] ?? `pb-offer-${view.ruleId}`;
   let container = document.getElementById(containerId);
@@ -204,7 +278,9 @@ function mountOfferView(host: HTMLElement, view: StorefrontWidgetView): void {
 }
 
 export function teardownProductWidgets(): void {
-  lastProductId = undefined;
+  lastRenderedProductId = undefined;
+  offerCache.clear();
+  stopMountWatcher();
   document.getElementById(MOUNT_ID)?.remove();
 }
 

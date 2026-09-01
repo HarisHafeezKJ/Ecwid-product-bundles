@@ -13,6 +13,7 @@ import {
   whenEcwidReady,
 } from './ecwid';
 import { initProductWidgets, teardownProductWidgets } from './product-widget';
+import { isInstantSiteHost } from './instant-site';
 import type { EcwidPage } from './types';
 import { injectStyles } from './utils';
 import { apiBaseFromScript, findOwnScript } from './script-config';
@@ -74,7 +75,13 @@ function bootstrap(): void {
       /* early hook for future skeleton UI */
     });
 
-    handlePage();
+    // Instant Site hydrates product DOM after our script runs; defer initial mount.
+    if (isInstantSiteHost()) {
+      window.setTimeout(() => handlePage(), 500);
+      window.setTimeout(() => handlePage(), 2000);
+    } else {
+      handlePage();
+    }
   });
 }
 
