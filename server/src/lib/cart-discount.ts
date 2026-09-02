@@ -2,9 +2,9 @@ import type { BundleRule, CartQtyLine } from '@pb/shared';
 import {
   bestVolumeTier,
   bundleLineSale,
-  cartQtyForProduct,
   discountDisplayName,
   exactVolumeTier,
+  fixedBundleCompleteCount,
   isRuleEligible,
   isTierDiscountable,
   mixMatchCartQty,
@@ -92,14 +92,16 @@ function fixedBundleDiscount(
   items: EcwidDiscountCartItem[],
   lines: CartQtyLine[],
 ): EcwidCartDiscount | null {
-  if (!isRuleEligible(rule, lines)) return null;
+  const bundleCount = fixedBundleCompleteCount(rule, lines);
+  if (bundleCount <= 0) return null;
 
   const components = rule.items?.components ?? [];
   const productIds = components.map((c) => Number(c.productId)).filter((id) => id > 0);
   let savings = 0;
 
   for (const component of components) {
-    const qty = cartQtyForProduct(lines, component.productId);
+    const minQty = Math.max(1, component.minQuantity ?? 1);
+    const qty = bundleCount * minQty;
     if (qty <= 0) continue;
     const catalogHint = component.price != null && component.price > 0 ? component.price : undefined;
     const catalog = catalogUnitPrice(items, component.productId, catalogHint);

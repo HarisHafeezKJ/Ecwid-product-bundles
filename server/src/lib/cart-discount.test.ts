@@ -25,6 +25,28 @@ function volumeRule(overrides: Partial<BundleRule> = {}): BundleRule {
   };
 }
 
+function fixedBundleRule(
+  components: Array<{ productId: string; minQuantity?: number; price?: number }>,
+  discountValue = 10,
+): BundleRule {
+  return {
+    id: 'bundle-1',
+    title: 'Bundle Deal',
+    ruleType: 'FIXED_BUNDLE',
+    discountType: 'PERCENTAGE',
+    discountValue,
+    status: 'ACTIVE',
+    applyToAllProducts: false,
+    widgetStyle: {},
+    items: { components },
+    volumeTiers: { tiers: [] },
+    triggerProductIds: [],
+    suggestedProductIds: [],
+    allowVariantChoice: false,
+    storeId: '1001',
+  };
+}
+
 describe('calculateCartDiscounts', () => {
   it('returns empty discounts when cart is empty', () => {
     const result = calculateCartDiscounts([volumeRule()], []);
@@ -38,5 +60,49 @@ describe('calculateCartDiscounts', () => {
     );
     assert.ok(result.discounts.length > 0);
     assert.ok(result.discounts[0]!.value > 0);
+  });
+
+  it('discounts only bundle-defined quantities when cart has excess units', () => {
+    const rule = fixedBundleRule([
+      { productId: '101', minQuantity: 2, price: 50 },
+      { productId: '102', minQuantity: 2, price: 20 },
+      { productId: '103', minQuantity: 2, price: 40 },
+    ]);
+
+    const exactResult = calculateCartDiscounts([rule], [
+      { productId: 101, quantity: 2, productPrice: 50 },
+      { productId: 102, quantity: 2, productPrice: 20 },
+      { productId: 103, quantity: 2, productPrice: 40 },
+    ]);
+
+    const excessResult = calculateCartDiscounts([rule], [
+      { productId: 101, quantity: 3, productPrice: 50 },
+      { productId: 102, quantity: 14, productPrice: 20 },
+      { productId: 103, quantity: 2, productPrice: 40 },
+    ]);
+
+    assert.ok(exactResult.discounts.length === 1);
+    assert.ok(excessResult.discounts.length === 1);
+    assert.equal(
+      excessResult.discounts[0]!.value,
+      exactResult.discounts[0]!.value,
+      'excess units should not increase bundle savings',
+    );
+  });
+
+  it('returns no fixed bundle discount when a component is below min quantity', () => {
+    const rule = fixedBundleRule([
+      { productId: '101', minQuantity: 2, price: 50 },
+      { productId: '102', minQuantity: 2, price: 20 },
+      { productId: '103', minQuantity: 2, price: 40 },
+    ]);
+
+    const result = calculateCartDiscounts([rule], [
+      { productId: 101, quantity: 1, productPrice: 50 },
+      { productId: 102, quantity: 2, productPrice: 20 },
+      { productId: 103, quantity: 2, productPrice: 40 },
+    ]);
+
+    assert.deepEqual(result.discounts, []);
   });
 });

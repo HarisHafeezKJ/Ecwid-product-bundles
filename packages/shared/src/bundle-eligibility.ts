@@ -57,13 +57,22 @@ function volumeRuleClaimsProduct(rule: BundleRule, productId: string): boolean {
   return targets.includes(productId);
 }
 
-function isFixedBundleEligible(rule: BundleRule, lines: CartQtyLine[]): boolean {
+/** Number of complete fixed-bundle sets present in the cart (limited by scarcest component). */
+export function fixedBundleCompleteCount(rule: BundleRule, lines: CartQtyLine[]): number {
   const items = rule.items?.components ?? [];
-  if (items.length < 2) return false;
-  return items.every((item) => {
+  if (items.length < 2) return 0;
+
+  const counts = items.map((item) => {
     const minQty = Math.max(1, item.minQuantity ?? 1);
-    return cartQtyForProduct(lines, item.productId) >= minQty;
+    const cartQty = cartQtyForProduct(lines, item.productId);
+    return Math.floor(cartQty / minQty);
   });
+
+  return Math.min(...counts);
+}
+
+function isFixedBundleEligible(rule: BundleRule, lines: CartQtyLine[]): boolean {
+  return fixedBundleCompleteCount(rule, lines) > 0;
 }
 
 function isVolumeDiscountEligible(rule: BundleRule, lines: CartQtyLine[]): boolean {
