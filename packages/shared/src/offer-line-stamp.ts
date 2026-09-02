@@ -2,13 +2,12 @@ export const PB_OFFER_OPTION = 'pbOfferId';
 export const PB_DEAL_OPTION = 'pbDealId';
 export const PB_KIND_OPTION = 'pbKind';
 
-/** @deprecated Legacy catalog option — removed; stamps embed in variant values instead. */
+/** Hidden TEXT catalog option — different values keep each offer on its own cart line. */
 export const PB_DEAL_TEXT_OPTION = '_pbDeal';
 
-/** Invisible marker appended to a variant option value at add-to-cart (never shown on PDP). */
+/** @deprecated Ecwid normalizes variant values; do not embed stamps in Size. */
 export const DEAL_STAMP_SUFFIX = '\u200B\u200C';
 
-/** Invisible Unicode used as a secondary stamp in line descriptions when options are unavailable. */
 export const OFFER_MARK_PREFIX = '\u200B\u200C';
 
 const LEGACY_STAMP_KEYS = new Set([PB_OFFER_OPTION, PB_DEAL_OPTION, PB_KIND_OPTION]);
@@ -62,43 +61,46 @@ export function stripDealStampFromOptions(
 }
 
 /**
- * Attach offer/deal metadata to cart line options when adding from an offer widget.
- * Embeds an invisible suffix on the first variant option (e.g. Size) so Ecwid keeps each
- * deal on its own cart line without adding anything to the product page.
+ * Attach offer/deal metadata when adding from an offer widget.
+ * Uses the `_pbDeal` TEXT option (set on add-to-cart only — not filled on the product page).
  */
+export function stampCartLineOptions(
+  variantOptions: Record<string, string> | undefined,
+  offerId: string,
+  dealId?: string,
+  kind?: string,
+): Record<string, string> | undefined {
+  const merged = {
+    ...(variantOptions ?? {}),
+    [PB_DEAL_TEXT_OPTION]: encodeDealStampValue(offerId, dealId, kind),
+  };
+  return merged;
+}
+
+/** @deprecated Use stampCartLineOptions */
 export function stampIntoVariantOptions(
   variantOptions: Record<string, string> | undefined,
   offerId: string,
   dealId?: string,
   kind?: string,
 ): Record<string, string> | undefined {
-  const stamp = encodeDealStampValue(offerId, dealId, kind);
-  const base = variantOptions ?? {};
-  const keys = Object.keys(base);
-  if (keys.length === 0) return undefined;
-
-  const key = keys[0]!;
-  return {
-    ...base,
-    [key]: `${base[key]}${DEAL_STAMP_SUFFIX}${stamp}`,
-  };
+  return stampCartLineOptions(variantOptions, offerId, dealId, kind);
 }
 
-/** @deprecated Use stampIntoVariantOptions */
 export function stampOptions(
   offerId: string,
   dealId?: string,
   kind?: string,
 ): Record<string, string> {
-  return stampIntoVariantOptions({}, offerId, dealId, kind) ?? {};
+  return { [PB_DEAL_TEXT_OPTION]: encodeDealStampValue(offerId, dealId, kind) };
 }
 
-/** Options sent to Ecwid `Cart.addProduct` (variant choices + embedded deal stamp). */
+/** Variant + `_pbDeal` options sent to Ecwid `Cart.addProduct`. */
 export function ecwidCartOptions(options?: Record<string, string>): Record<string, string> | undefined {
   if (!options) return undefined;
   const merged: Record<string, string> = {};
   for (const [key, value] of Object.entries(options)) {
-    if (LEGACY_STAMP_KEYS.has(key) || key === PB_DEAL_TEXT_OPTION) continue;
+    if (LEGACY_STAMP_KEYS.has(key)) continue;
     if (value) merged[key] = value;
   }
   return Object.keys(merged).length > 0 ? merged : undefined;
@@ -124,8 +126,8 @@ export function readStampFromOptions(options?: Record<string, string>): {
 } {
   if (!options) return {};
 
-  const legacyDeal = options[PB_DEAL_TEXT_OPTION];
-  if (legacyDeal) return decodeDealStampValue(legacyDeal);
+  const dealStamp = options[PB_DEAL_TEXT_OPTION];
+  if (dealStamp) return decodeDealStampValue(dealStamp);
 
   if (options[PB_OFFER_OPTION]) {
     return {

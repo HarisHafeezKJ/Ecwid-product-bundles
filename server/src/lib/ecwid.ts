@@ -265,7 +265,47 @@ export async function ensureNameYourPriceEnabled(
   );
 }
 
-/** Remove legacy `_pbDeal` catalog options (stamps now embed in variant values at add-to-cart). */
+/** Ensures a hidden TEXT option exists so widget add-to-cart can stamp distinct deal lines. */
+export async function ensureDealStampOption(
+  tokens: EcwidStoreTokens,
+  productIds: string[],
+): Promise<void> {
+  if (!isPrivateStoreTokens(tokens) || productIds.length === 0) return;
+
+  const unique = [...new Set(productIds.filter(Boolean))];
+  await Promise.all(
+    unique.map(async (productId) => {
+      try {
+        const raw = await ecwidFetch<Record<string, unknown>>(
+          tokens.storeId,
+          tokens.accessToken,
+          `/products/${productId}`,
+        );
+        const options = Array.isArray(raw.options) ? raw.options : [];
+        if (options.some((row) => (row as Record<string, unknown>).name === PB_DEAL_TEXT_OPTION)) return;
+
+        await ecwidFetch(tokens.storeId, tokens.accessToken, `/products/${productId}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            options: [
+              ...options,
+              {
+                type: 'TEXTFIELD',
+                name: PB_DEAL_TEXT_OPTION,
+                title: ' ',
+                required: false,
+              },
+            ],
+          }),
+        });
+      } catch (err) {
+        console.warn('[pb] ensureDealStampOption failed', productId, err);
+      }
+    }),
+  );
+}
+
+/** Remove legacy `_pbDeal` catalog options when migrating away from stamp-based lines. */
 export async function removeDealStampOption(
   tokens: EcwidStoreTokens,
   productIds: string[],

@@ -166,10 +166,39 @@ function fixedBundleDiscount(
   };
 }
 
+function bundleAllocatedQtyByProduct(
+  bundleRules: BundleRule[],
+  lines: DiscountCartLine[],
+): Map<string, number> {
+  const allocated = new Map<string, number>();
+
+  for (const rule of bundleRules) {
+    const ruleLines = linesForBundleRule(lines, rule);
+    if (!ruleLines.length) continue;
+    const cartQtyLines = ruleLines.map((line) => ({
+      productId: line.productId,
+      quantity: line.quantity,
+    }));
+    const bundleCount = fixedBundleCompleteCount(rule, cartQtyLines);
+    if (bundleCount <= 0) continue;
+
+    for (const component of parseBundleItems(rule.items).components) {
+      const qty = fixedBundleDiscountQty(component, bundleCount);
+      allocated.set(
+        component.productId,
+        (allocated.get(component.productId) ?? 0) + qty,
+      );
+    }
+  }
+
+  return allocated;
+}
+
 function volumeDiscountForRule(
   rule: BundleRule,
   items: EcwidDiscountCartItem[],
   lines: DiscountCartLine[],
+  bundleAllocated?: Map<string, number>,
 ): EcwidCartDiscount | null {
   const tiers = (rule.volumeTiers?.tiers ?? []).filter(isTierDiscountable);
   if (!tiers.length) return null;
@@ -187,26 +216,30 @@ function volumeDiscountForRule(
   for (const line of lines) {
     if (pool && !pool.has(line.productId) && line.productId !== rule.targetProductId) continue;
     if (tierByProduct.has(line.productId)) continue;
-    const tier = exactVolumeTier(tiers, cartQtyForProduct(cartQtyLines, line.productId));
+    const totalQty = cartQtyForProduct(cartQtyLines, line.productId);
+    const allocated = bundleAllocated?.get(line.productId) ?? 0;
+    const volumeQty = Math.max(0, totalQty - allocated);
+    const tier = exactVolumeTier(tiers, volumeQty);
     if (tier) tierByProduct.set(line.productId, tier);
   }
 
   const productIds: number[] = [];
   let savings = 0;
 
-  for (const line of lines) {
-    if (pool && !pool.has(line.productId) && line.productId !== rule.targetProductId) continue;
-    const tier = tierByProduct.get(line.productId);
-    if (!tier) continue;
+  for (const [productId, tier] of tierByProduct) {
+    const totalQty = cartQtyForProduct(cartQtyLines, productId);
+    const allocated = bundleAllocated?.get(productId) ?? 0;
+    const volumeQty = Math.max(0, totalQty - allocated);
+    if (volumeQty <= 0) continue;
 
-    const catalog = catalogUnitPrice(items, line.productId);
+    const catalog = catalogUnitPrice(items, productId);
     if (catalog <= 0) continue;
     const sale = volumeUnitPrice(catalog, tier);
-    const lineSavings = Math.max(0, catalog - sale) * line.quantity;
-    if (lineSavings <= 0) continue;
+    const productSavings = Math.max(0, catalog - sale) * volumeQty;
+    if (productSavings <= 0) continue;
 
-    savings += lineSavings;
-    const pid = Number(line.productId);
+    savings += productSavings;
+    const pid = Number(productId);
     if (pid > 0) productIds.push(pid);
   }
 
@@ -262,11 +295,14 @@ function mixMatchDiscount(
 /** Assign unstamped products to at most one volume rule (ambiguous overlaps apply none). */
 function volumeDiscountsForUnstampedLines(
   volumeRules: BundleRule[],
+  bundleRules: BundleRule[],
+  allLines: DiscountCartLine[],
   items: EcwidDiscountCartItem[],
   lines: DiscountCartLine[],
 ): EcwidCartDiscount[] {
   const discounts: EcwidCartDiscount[] = [];
   const linesByRule = new Map<string, DiscountCartLine[]>();
+  const bundleAllocated = bundleAllocatedQtyByProduct(bundleRules, allLines);
 
   for (const line of lines) {
     const rule = uniqueVolumeRuleForProduct(volumeRules, line.productId);
@@ -279,7 +315,12 @@ function volumeDiscountsForUnstampedLines(
   for (const rule of volumeRules) {
     const ruleLines = linesByRule.get(rule.id);
     if (!ruleLines?.length) continue;
-    const discount = volumeDiscountForRule(rule, ruleLines.map((line) => line.item), ruleLines);
+    const discount = volumeDiscountForRule(
+      rule,
+      ruleLines.map((line) => line.item),
+      ruleLines,
+      bundleAllocated,
+    );
     if (discount) discounts.push(discount);
   }
 
@@ -322,6 +363,7 @@ export function calculateCartDiscounts(
   }
 
   const volumeRules = active.filter((r) => r.ruleType === 'VOLUME_DISCOUNT');
+  const bundleRules = active.filter((r) => r.ruleType === 'FIXED_BUNDLE');
   for (const rule of volumeRules) {
     const stampedLines = lines.filter((line) => line.offerId === rule.id && line.kind === 'pb-volume');
     if (stampedLines.length > 0) {
@@ -338,6 +380,8 @@ export function calculateCartDiscounts(
   discounts.push(
     ...volumeDiscountsForUnstampedLines(
       volumeRules,
+      bundleRules,
+      lines,
       unstampedVolumeLines.map((line) => line.item),
       unstampedVolumeLines,
     ),

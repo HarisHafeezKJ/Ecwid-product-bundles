@@ -14,6 +14,7 @@ import {
   whenEcwidReady,
 } from './ecwid';
 import { initProductWidgets, teardownProductWidgets } from './product-widget';
+import { startDealStampUiGuard } from './deal-stamp-ui';
 import { isInstantSiteHost } from './instant-site';
 import type { EcwidPage } from './types';
 import { injectStyles } from './utils';
@@ -21,6 +22,7 @@ import { apiBaseFromScript, findOwnScript } from './script-config';
 import cartUpsellCss from './styles/cart-upsell.css?inline';
 
 let initialized = false;
+let stopDealStampUi: (() => void) | undefined;
 
 function enableCartSync(): void {
   startVolumeCartSync();
@@ -72,6 +74,8 @@ function bootstrap(): void {
   injectStyles('pb-cart-upsell-styles', cartUpsellCss);
   readScriptConfig();
   resolveApiBaseUrl();
+  stopDealStampUi?.();
+  stopDealStampUi = startDealStampUiGuard();
 
   whenEcwidReady(() => {
     console.info('[pb-bundles] storefront ready', {
