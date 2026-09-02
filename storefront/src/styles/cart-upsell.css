@@ -105,3 +105,9 @@
   border-radius: 8px;
   padding: 0.35rem 0.5rem;
 }
+
+/* Internal `_pbDeal` TEXT option — separates offer lines; hide from cart UI. */
+.ec-cart-option[data-option-name="_pbDeal"],
+.ecwid-productOption[data-name="_pbDeal"] {
+  display: none !important;
+}

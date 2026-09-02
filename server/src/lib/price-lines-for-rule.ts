@@ -309,7 +309,7 @@ async function priceMixMatch(
         promoLabel,
         options: mergeCartOptions(
           variantOptions,
-          stampOptions(rule.id, dealId, 'pb-volume'),
+          stampOptions(rule.id, dealId, 'pb-mix'),
         ),
       };
     }),

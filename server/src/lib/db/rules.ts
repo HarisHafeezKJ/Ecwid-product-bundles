@@ -19,6 +19,7 @@ import {
   writePublicConfig,
   writeStorageJson,
 } from '../storage/ecwid-storage.js';
+import { ensureDealStampOption } from '../ecwid.js';
 import { mapStoredRule, ruleInputFromBody, type StoredRuleRow, type StoredRulesDoc } from './mappers.js';
 import { serializeRulesForPublicConfig } from './public-rules.js';
 
@@ -98,6 +99,20 @@ export async function listActiveRulesForStore(
     .filter((r) => r.status === 'ACTIVE' && (!ruleType || r.ruleType === ruleType))
     .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
     .map(mapStoredRule);
+}
+
+async function ensureDealStampForRule(
+  storeId: string,
+  rule: BundleRule,
+  components: Array<{ productId: string }>,
+  sessionAccessToken?: string,
+): Promise<void> {
+  const tokens = await resolveStoreTokens(storeId, sessionAccessToken);
+  await ensureDealStampOption(tokens, [
+    ...components.map((component) => component.productId),
+    rule.targetProductId,
+    rule.primaryProductId,
+  ].filter((id): id is string => Boolean(id)));
 }
 
 export async function saveBundleRule(
@@ -186,7 +201,9 @@ export async function saveBundleRule(
       updatedAt: now,
     };
     await saveRulesDoc(storeId, doc, sessionAccessToken);
-    return mapStoredRule(doc.rules[idx]!);
+    const saved = mapStoredRule(doc.rules[idx]!);
+    await ensureDealStampForRule(storeId, saved, items.components, sessionAccessToken);
+    return saved;
   }
 
   const row: StoredRuleRow = {
@@ -197,7 +214,9 @@ export async function saveBundleRule(
   };
   doc.rules.push(row);
   await saveRulesDoc(storeId, doc, sessionAccessToken);
-  return mapStoredRule(row);
+  const saved = mapStoredRule(row);
+  await ensureDealStampForRule(storeId, saved, items.components, sessionAccessToken);
+  return saved;
 }
 
 export async function setBundleStatus(

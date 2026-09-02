@@ -12,6 +12,11 @@ function parseDiscountCartItems(raw: unknown[]): EcwidDiscountCartItem[] {
     const priceInProductList = Number(row.priceInProductList ?? 0);
     const productPrice = Number(row.productPrice ?? 0);
     const price = Number(row.price ?? 0);
+    const selectedOptions = row.selectedOptions;
+    const flatOptions =
+      row.options && typeof row.options === 'object' && !Array.isArray(row.options)
+        ? (row.options as Record<string, string>)
+        : undefined;
     return {
       productId: Number(row.productId ?? 0),
       amount: qty,
@@ -19,6 +24,8 @@ function parseDiscountCartItems(raw: unknown[]): EcwidDiscountCartItem[] {
       productPrice: productPrice > 0 ? productPrice : priceInProductList > 0 ? priceInProductList : 0,
       priceInProductList: priceInProductList > 0 ? priceInProductList : undefined,
       price: price > 0 ? price : productPrice > 0 ? productPrice : priceInProductList,
+      selectedOptions,
+      options: flatOptions,
     };
   });
 }

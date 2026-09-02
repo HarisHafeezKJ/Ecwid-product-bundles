@@ -165,6 +165,58 @@ describe('calculateCartDiscounts', () => {
     assert.ok((result.discounts[0]?.value ?? 0) > 0);
   });
 
+  it('applies bundle and volume discounts on the same product when deal stamps differ', () => {
+    const bundle = fixedBundleRule([
+      { productId: '42', minQuantity: 2, price: 50 },
+      { productId: '99', minQuantity: 2, price: 20 },
+    ]);
+    bundle.title = 'Lazy bundle 1';
+
+    const volume = volumeRule({
+      id: 'vol-hoodie',
+      title: 'Lazy quantity discount deal 1',
+      applyToAllProducts: false,
+      items: { components: [{ productId: '42', minQuantity: 1, isPrimary: true }] },
+      volumeTiers: {
+        tiers: [{ qty: 5, discountType: 'PERCENTAGE', discountValue: 10, title: '5+' }],
+      },
+    });
+
+    const dealStamp = (offerId: string, dealId: string, kind: string) => ({
+      selectedOptions: [
+        { name: '_pbDeal', value: [offerId, dealId, kind].join('\x1f') },
+      ],
+    });
+
+    const result = calculateCartDiscounts(
+      [bundle, volume],
+      [
+        {
+          productId: 42,
+          quantity: 2,
+          productPrice: 50,
+          ...dealStamp(bundle.id, `${bundle.id}:bundle`, 'pb-combo'),
+        },
+        {
+          productId: 99,
+          quantity: 2,
+          productPrice: 20,
+          ...dealStamp(bundle.id, `${bundle.id}:bundle`, 'pb-combo'),
+        },
+        {
+          productId: 42,
+          quantity: 5,
+          productPrice: 50,
+          ...dealStamp(volume.id, `${volume.id}:vol-5`, 'pb-volume'),
+        },
+      ],
+    );
+
+    assert.equal(result.discounts.length, 2);
+    assert.ok(result.discounts.some((row) => row.description.includes('Lazy bundle 1')));
+    assert.ok(result.discounts.some((row) => row.description.includes('Lazy quantity discount deal 1')));
+  });
+
   it('returns no fixed bundle discount when a component is below min quantity', () => {
     const rule = fixedBundleRule([
       { productId: '101', minQuantity: 2, price: 50 },

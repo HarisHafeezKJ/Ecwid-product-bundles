@@ -1,4 +1,4 @@
-import { bundleUsesPerUnitVariantPickers } from '@pb/shared';
+import { bundleUsesPerUnitVariantPickers, ecwidCartOptions } from '@pb/shared';
 import type { StorefrontWidgetView, VariantOption, WidgetProductItem } from '../types';
 import { addDiscounted } from '../api';
 import { cartIdFrom, getCart, refreshCart } from '../ecwid';
@@ -8,7 +8,6 @@ import { qs, withTimeout, asCopyText } from '../utils';
 import { applyWidgetStyle, mirrorNativeAtcTheme } from './widget-style-css';
 import widgetCss from '../styles/widget.css?inline';
 
-const PB_STAMP_KEYS = new Set(['pbOfferId', 'pbDealId', 'pbKind']);
 const ECWID_ADD_TIMEOUT_MS = 4000;
 
 export interface WidgetShellState {
@@ -104,29 +103,18 @@ export async function addDiscountedAndRefresh(
 }
 
 /**
- * Fallback used when the server response is missing `ecwidLines`. We deliberately drop
- * both `selectedPrice` and the pb stamp keys — see the comment in `addEcwidLines` for why
- * the bundle discount comes from the `customize_cart_calculation` webhook and not from
- * per-line selectedPrice.
+ * Fallback used when the server response is missing `ecwidLines`. Keeps variant
+ * options and the hidden `_pbDeal` stamp so Ecwid treats each offer as its own line.
  */
 function pricedLinesToEcwidLines(lines: PricedLineResponse[]): EcwidCartLinePayload[] {
   return lines.map((line) => {
-    const options = stripStampOptions(line.options);
+    const options = ecwidCartOptions(line.options);
     return {
       productId: Number(line.productId),
       quantity: line.quantity,
       ...(options ? { options } : {}),
     };
   });
-}
-
-function stripStampOptions(options?: Record<string, string>): Record<string, string> | undefined {
-  if (!options) return undefined;
-  const stripped: Record<string, string> = {};
-  for (const [key, value] of Object.entries(options)) {
-    if (!PB_STAMP_KEYS.has(key) && value) stripped[key] = value;
-  }
-  return Object.keys(stripped).length > 0 ? stripped : undefined;
 }
 
 function toEcwidAddPayload(line: EcwidCartLinePayload): EcwidAddProductPayload {
@@ -179,14 +167,14 @@ async function addEcwidLines(lines: EcwidCartLinePayload[]): Promise<void> {
 
   const targets = new Map<string, BundleTarget>();
   for (const line of lines) {
-    const variantOptions = stripStampOptions(line.options);
-    const key = targetKey(line.productId, variantOptions);
+    const ecwidOptions = ecwidCartOptions(line.options);
+    const key = targetKey(line.productId, ecwidOptions);
     const existing = targets.get(key);
     if (existing) existing.wanted += line.quantity;
     else {
       targets.set(key, {
-        line,
-        variantOptions,
+        line: { ...line, options: ecwidOptions },
+        variantOptions: ecwidOptions,
         wanted: line.quantity,
         baseline: 0,
         baselineAnyOption: 0,

@@ -1,5 +1,5 @@
 import type { PricedLine } from '@pb/shared';
-import { PB_DEAL_OPTION, PB_KIND_OPTION, PB_OFFER_OPTION } from '@pb/shared';
+import { ecwidCartOptions } from '@pb/shared';
 
 export interface EcwidCartLinePayload {
   productId: number;
@@ -8,16 +8,9 @@ export interface EcwidCartLinePayload {
   selectedPrice?: number;
 }
 
-const STAMP_KEYS = new Set([PB_OFFER_OPTION, PB_DEAL_OPTION, PB_KIND_OPTION]);
-
-/** Ecwid product options only — pb stamp keys are not real product options. */
+/** @deprecated Use ecwidCartOptions from @pb/shared */
 export function stripStampOptions(options?: Record<string, string>): Record<string, string> | undefined {
-  if (!options) return undefined;
-  const stripped: Record<string, string> = {};
-  for (const [key, value] of Object.entries(options)) {
-    if (!STAMP_KEYS.has(key) && value) stripped[key] = value;
-  }
-  return Object.keys(stripped).length > 0 ? stripped : undefined;
+  return ecwidCartOptions(options);
 }
 
 /**
@@ -30,10 +23,12 @@ export function stripStampOptions(options?: Record<string, string>): Record<stri
  * applied at the cart level through the `customize_cart_calculation` webhook
  * (`/api/webhooks/discount`) — that's the supported path for discounted lines that Ecwid
  * won't second-guess.
+ *
+ * The hidden `_pbDeal` TEXT option is kept so each offer becomes a separate cart line.
  */
 export function pricedLinesToEcwidCartLines(priced: PricedLine[]): EcwidCartLinePayload[] {
   return priced.map((line) => {
-    const options = stripStampOptions(line.options);
+    const options = ecwidCartOptions(line.options);
     return {
       productId: Number(line.productId),
       quantity: line.quantity,

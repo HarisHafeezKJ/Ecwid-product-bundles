@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { BundleRule } from '@pb/shared';
 import { parseBundleItems } from '@pb/shared';
 import { pricedLinesToEcwidCartLines } from '../../lib/ecwid-cart-lines.js';
+import { ensureDealStampOption } from '../../lib/ecwid.js';
 import { priceLinesForRule, type PriceLineInput } from '../../lib/price-lines-for-rule.js';
 import { resolveStorefrontBundleRule } from '../../lib/storefront-rules.js';
 import {
@@ -12,6 +13,8 @@ import {
   jsonResponse,
 } from '../../lib/api-response.js';
 import { resolveStorefrontTokens } from '../../lib/storefront-tokens.js';
+import { getOAuthTokens } from '../../lib/storage/oauth-cache.js';
+import { isPrivateStoreTokens } from '../../lib/ecwid.js';
 import { requireStoreId } from '../../lib/store-context.js';
 import { parseAddDiscountedBody } from '../../lib/validate-body.js';
 
@@ -84,10 +87,13 @@ addDiscountedRouter.post('/', async (req, res) => {
 
     const normalized = expandLinesForRule(rule, normalizeClientLines(lines));
 
-    // We no longer flip nameYourPriceEnabled on components. Bundle discounts are applied
-    // through the discount webhook, and the storefront JS adds each line at its catalog
-    // price. Flipping PWYW per click also required a private admin token (many installs
-    // only have a public token) and raced Ecwid's storefront-side caching of the flag.
+    const privateTokens = await getOAuthTokens(storeId);
+    const catalogTokens =
+      privateTokens && isPrivateStoreTokens(privateTokens) ? privateTokens : tokens;
+    await ensureDealStampOption(catalogTokens, [
+      ...normalized.map((line) => line.productId),
+      ...parseBundleItems(rule.items).components.map((c) => c.productId),
+    ]);
 
     const priced = await priceLinesForRule(tokens, rule, normalized);
 
