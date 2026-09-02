@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import type { BundleRule } from '@pb/shared';
 import { parseBundleItems } from '@pb/shared';
-import { ensureNameYourPriceEnabled } from '../../lib/ecwid.js';
 import { pricedLinesToEcwidCartLines } from '../../lib/ecwid-cart-lines.js';
 import { priceLinesForRule, type PriceLineInput } from '../../lib/price-lines-for-rule.js';
 import { resolveStorefrontBundleRule } from '../../lib/storefront-rules.js';
@@ -14,7 +13,6 @@ import {
 } from '../../lib/api-response.js';
 import { resolveStorefrontTokens } from '../../lib/storefront-tokens.js';
 import { requireStoreId } from '../../lib/store-context.js';
-import { getOAuthTokens } from '../../lib/storage/oauth-cache.js';
 import { parseAddDiscountedBody } from '../../lib/validate-body.js';
 
 function normalizeClientLines(lines: unknown[]): PriceLineInput[] {
@@ -86,14 +84,10 @@ addDiscountedRouter.post('/', async (req, res) => {
 
     const normalized = expandLinesForRule(rule, normalizeClientLines(lines));
 
-    const privateOAuth = await getOAuthTokens(storeId);
-    if (rule.ruleType === 'FIXED_BUNDLE' && privateOAuth?.accessToken) {
-      const componentIds = parseBundleItems(rule.items).components.map((c) => c.productId);
-      await ensureNameYourPriceEnabled(
-        { storeId, accessToken: privateOAuth.accessToken, publicToken: tokens.publicToken },
-        componentIds,
-      );
-    }
+    // We no longer flip nameYourPriceEnabled on components. Bundle discounts are applied
+    // through the discount webhook, and the storefront JS adds each line at its catalog
+    // price. Flipping PWYW per click also required a private admin token (many installs
+    // only have a public token) and raced Ecwid's storefront-side caching of the flag.
 
     const priced = await priceLinesForRule(tokens, rule, normalized);
 

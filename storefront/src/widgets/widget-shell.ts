@@ -86,20 +86,28 @@ export async function addDiscountedAndRefresh(
   window.setTimeout(() => void refreshCart(), 400);
 }
 
+/**
+ * Fallback used when the server response is missing `ecwidLines`. We deliberately drop
+ * both `selectedPrice` and the pb stamp keys — see the comment in `addEcwidLines` for why
+ * the bundle discount comes from the `customize_cart_calculation` webhook and not from
+ * per-line selectedPrice.
+ */
 function pricedLinesToEcwidLines(lines: PricedLineResponse[]): EcwidCartLinePayload[] {
-  return lines.map((line) => ({
-    productId: Number(line.productId),
-    quantity: line.quantity,
-    ...(line.options && Object.keys(line.options).length > 0 ? { options: line.options } : {}),
-    selectedPrice: line.unitPrice,
-  }));
+  return lines.map((line) => {
+    const options = stripStampOptions(line.options);
+    return {
+      productId: Number(line.productId),
+      quantity: line.quantity,
+      ...(options ? { options } : {}),
+    };
+  });
 }
 
 function stripStampOptions(options?: Record<string, string>): Record<string, string> | undefined {
   if (!options) return undefined;
   const stripped: Record<string, string> = {};
   for (const [key, value] of Object.entries(options)) {
-    if (!PB_STAMP_KEYS.has(key)) stripped[key] = value;
+    if (!PB_STAMP_KEYS.has(key) && value) stripped[key] = value;
   }
   return Object.keys(stripped).length > 0 ? stripped : undefined;
 }
@@ -109,7 +117,6 @@ function toEcwidAddPayload(line: EcwidCartLinePayload): EcwidAddProductPayload {
     id: line.productId,
     quantity: line.quantity,
     ...(line.options ? { options: line.options } : {}),
-    ...(line.selectedPrice != null ? { selectedPrice: line.selectedPrice } : {}),
   };
 }
 
@@ -134,6 +141,18 @@ function targetKey(productId: number, options?: Record<string, string>): string 
  * in one call — so the whole bundle is dispatched in a single concurrent pass and verified
  * once against the resulting cart. Adding line by line with a verification round-trip per
  * line is what made a three-item bundle take the better part of a minute.
+ *
+ * Lines are always sent at their catalog price with real variant options only. We
+ * intentionally do NOT set `selectedPrice`: Ecwid's storefront JS re-validates each cart
+ * line after every mutation, and when a `selectedPrice` sits below `productPrice` without
+ * Pay-What-You-Want cached in the page it drops the line with "Product X is removed from
+ * cart as its price has increased." and starts a thrash loop. The bundle discount is
+ * applied at the cart level by the `customize_cart_calculation` webhook, which is the
+ * mechanism Ecwid actually supports for programmatic discounts.
+ *
+ * If a line's variant options don't match any real variation (rare — a widget option
+ * that's gone stale between render and click), we retry once without options so the
+ * customer isn't left with a partially-added bundle.
  */
 async function addEcwidLines(lines: EcwidCartLinePayload[]): Promise<void> {
   const cartApi = getEcwid()?.Cart;
@@ -164,37 +183,34 @@ async function addEcwidLines(lines: EcwidCartLinePayload[]): Promise<void> {
     target.baselineAnyOption = lineQtyInCart(before, target.line.productId);
   }
 
-  let pending = [...targets.values()].map((target) => ({ target, missing: target.wanted }));
+  await Promise.all(
+    [...targets.values()].map((target) =>
+      dispatchAdd(cartApi, {
+        productId: target.line.productId,
+        quantity: target.wanted,
+        options: target.variantOptions,
+      }),
+    ),
+  );
+  await refreshCart();
 
-  // Each pass drops one payload feature that Ecwid may reject: selectedPrice needs
-  // nameYourPriceEnabled on the product, and options must match a real variation.
-  const passes: ((target: BundleTarget, missing: number) => EcwidCartLinePayload)[] = [
-    (target, missing) => ({ ...target.line, quantity: missing, options: target.variantOptions }),
-    (target, missing) => ({
-      ...target.line,
-      quantity: missing,
-      options: target.variantOptions,
-      selectedPrice: undefined,
-    }),
-    (target, missing) => ({
-      ...target.line,
-      quantity: missing,
-      options: undefined,
-      selectedPrice: undefined,
-    }),
-  ];
+  let pending = await measureShortfalls([...targets.values()], false);
+  if (pending.length === 0) return;
 
-  for (let pass = 0; pass < passes.length && pending.length > 0; pass++) {
-    const build = passes[pass]!;
-    await Promise.all(
-      pending.map(({ target, missing }) => dispatchAdd(cartApi, build(target, missing))),
-    );
-    await refreshCart();
-
-    // The final pass drops options, so matching lines can no longer be identified by them.
-    const ignoreOptions = pass === passes.length - 1;
-    pending = await measureShortfalls([...targets.values()], ignoreOptions);
-  }
+  // One recovery attempt without variant options: matches the base product, so we then
+  // have to verify by product id alone and the ignoreOptions flag is set on the next
+  // measureShortfalls call.
+  await Promise.all(
+    pending.map(({ target, missing }) =>
+      dispatchAdd(cartApi, {
+        productId: target.line.productId,
+        quantity: missing,
+        options: undefined,
+      }),
+    ),
+  );
+  await refreshCart();
+  pending = await measureShortfalls([...targets.values()], true);
 
   if (pending.length === targets.size) {
     throw new Error('Could not add to cart.');
