@@ -282,7 +282,24 @@ export async function ensureDealStampOption(
           `/products/${productId}`,
         );
         const options = Array.isArray(raw.options) ? raw.options : [];
-        if (options.some((row) => (row as Record<string, unknown>).name === PB_DEAL_TEXT_OPTION)) return;
+        if (options.some((row) => (row as Record<string, unknown>).name === PB_DEAL_TEXT_OPTION)) {
+          const existing = options.find(
+            (row) => (row as Record<string, unknown>).name === PB_DEAL_TEXT_OPTION,
+          ) as Record<string, unknown> | undefined;
+          if (existing?.required) {
+            await ecwidFetch(tokens.storeId, tokens.accessToken, `/products/${productId}`, {
+              method: 'PUT',
+              body: JSON.stringify({
+                options: options.map((row) => {
+                  const opt = row as Record<string, unknown>;
+                  if (opt.name !== PB_DEAL_TEXT_OPTION) return row;
+                  return { ...opt, required: false, title: '\u200B' };
+                }),
+              }),
+            });
+          }
+          return;
+        }
 
         await ecwidFetch(tokens.storeId, tokens.accessToken, `/products/${productId}`, {
           method: 'PUT',
@@ -292,7 +309,7 @@ export async function ensureDealStampOption(
               {
                 type: 'TEXTFIELD',
                 name: PB_DEAL_TEXT_OPTION,
-                title: ' ',
+                title: '\u200B',
                 required: false,
               },
             ],
