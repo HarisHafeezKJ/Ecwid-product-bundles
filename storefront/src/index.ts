@@ -19,7 +19,6 @@ import type { EcwidPage } from './types';
 import { injectStyles } from './utils';
 import { apiBaseFromScript, findOwnScript } from './script-config';
 import cartUpsellCss from './styles/cart-upsell.css?inline';
-import widgetCss from './styles/widget.css?inline';
 
 let initialized = false;
 
@@ -70,7 +69,6 @@ function bootstrap(): void {
   if (initialized) return;
   initialized = true;
 
-  injectStyles('pb-widget-styles', widgetCss);
   injectStyles('pb-cart-upsell-styles', cartUpsellCss);
   readScriptConfig();
   resolveApiBaseUrl();

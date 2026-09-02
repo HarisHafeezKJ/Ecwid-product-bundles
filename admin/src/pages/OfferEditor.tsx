@@ -108,8 +108,30 @@ export default function OfferEditor({ initialDraft, onClose, onDirtyChange }: Of
         </div>
       )}
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-body" style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+      {saveError && <div className="error-banner" style={{ marginBottom: 16 }}>{saveError}</div>}
+      {validationErrors.length > 0 && (
+        <div className="error-banner" style={{ marginBottom: 16 }}>
+          <strong>Fix the following before saving:</strong>
+          <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
+            {validationErrors.map((message) => (
+              <li key={message}>{message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {setupHasErrors && validationErrors.length === 0 && (
+        <div className="error-banner" style={{ marginBottom: 16 }}>
+          <strong>Setup needs attention:</strong>
+          <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
+            {liveValidation.errors.map((message) => (
+              <li key={message}>{message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="card editor-workspace">
+        <div className="editor-workspace-toolbar">
           <div className="field" style={{ flex: 1, minWidth: 220 }}>
             <label htmlFor="offer-title">Offer name</label>
             <input
@@ -153,60 +175,36 @@ export default function OfferEditor({ initialDraft, onClose, onDirtyChange }: Of
             </button>
           </div>
         </div>
-      </div>
 
-      {saveError && <div className="error-banner" style={{ marginBottom: 16 }}>{saveError}</div>}
-      {validationErrors.length > 0 && (
-        <div className="error-banner" style={{ marginBottom: 16 }}>
-          <strong>Fix the following before saving:</strong>
-          <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
-            {validationErrors.map((message) => (
-              <li key={message}>{message}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {setupHasErrors && validationErrors.length === 0 && (
-        <div className="error-banner" style={{ marginBottom: 16 }}>
-          <strong>Setup needs attention:</strong>
-          <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
-            {liveValidation.errors.map((message) => (
-              <li key={message}>{message}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="card editor-shell">
         <div className="editor-layout">
-          <div className="editor-panel">
+          <div className="editor-main">
             <div className="editor-tabs">
-            <button
-              type="button"
-              className={tab === 'setup' ? 'active' : ''}
-              onClick={() => setTab('setup')}
-            >
-              1. Setup &amp; Offer Rules
-              {setupHasErrors && (
-                <span className="tab-error-badge" aria-label="Validation errors">
-                  {liveValidation.errors.length}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              className={tab === 'style' ? 'active' : ''}
-              onClick={() => setTab('style')}
-            >
-              2. Design &amp; Storefront Style
-            </button>
-          </div>
+              <button
+                type="button"
+                className={tab === 'setup' ? 'active' : ''}
+                onClick={() => setTab('setup')}
+              >
+                1. Setup &amp; Offer Rules
+                {setupHasErrors && (
+                  <span className="tab-error-badge" aria-label="Validation errors">
+                    {liveValidation.errors.length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                className={tab === 'style' ? 'active' : ''}
+                onClick={() => setTab('style')}
+              >
+                2. Design &amp; Storefront Style
+              </button>
+            </div>
 
-          {tab === 'setup' ? (
-            <EditorSetup draft={draft} onChange={patchDraft} onStyleChange={patchStyle} />
-          ) : (
-            <EditorStyle draft={draft} onStyleChange={patchStyle} onChange={patchDraft} />
-          )}
+            {tab === 'setup' ? (
+              <EditorSetup draft={draft} onChange={patchDraft} onStyleChange={patchStyle} />
+            ) : (
+              <EditorStyle draft={draft} onStyleChange={patchStyle} onChange={patchDraft} />
+            )}
           </div>
 
           <PreviewFrame device={device} onDeviceChange={setDevice}>

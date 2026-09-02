@@ -6,6 +6,7 @@ import { getEcwid } from '../ecwid';
 import type { EcwidCart, EcwidCartLinePayload, EcwidAddProductPayload, PricedLineResponse } from '../types';
 import { qs, withTimeout, asCopyText } from '../utils';
 import { applyWidgetStyle, mirrorNativeAtcTheme } from './widget-style-css';
+import widgetCss from '../styles/widget.css?inline';
 
 const PB_STAMP_KEYS = new Set(['pbOfferId', 'pbDealId', 'pbKind']);
 const ECWID_ADD_TIMEOUT_MS = 4000;
@@ -56,8 +57,23 @@ export function mountWidgetShell(
   html: string,
   view: StorefrontWidgetView,
 ): HTMLElement {
-  container.innerHTML = html;
-  const root = qs<HTMLElement>(container, '.pb-widget') ?? container;
+  container.replaceChildren();
+
+  const host = document.createElement('div');
+  host.className = 'pb-widget-shadow-host';
+  host.style.display = 'block';
+  host.style.width = '100%';
+  host.style.maxWidth = '100%';
+  container.appendChild(host);
+
+  const shadow = host.attachShadow({ mode: 'open' });
+  shadow.innerHTML = `<style>${widgetCss}</style>${html}`;
+
+  const root = shadow.querySelector<HTMLElement>('.pb-widget');
+  if (!root) {
+    return host;
+  }
+
   applyWidgetStyle(root, view.widgetStyle);
   mirrorNativeAtcTheme(root, view.widgetStyle);
   return root;

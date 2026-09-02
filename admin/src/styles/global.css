@@ -85,6 +85,7 @@ a {
   max-width: 1400px;
   width: 100%;
   margin: 0 auto;
+  overflow: visible;
 }
 
 .card {
@@ -92,6 +93,7 @@ a {
   border: 1px solid var(--pb-border);
   border-radius: var(--pb-radius);
   box-shadow: var(--pb-shadow);
+  overflow: visible;
 }
 
 .card-header {
@@ -401,64 +403,62 @@ a {
   padding: 20px;
 }
 
-/* Offer editor: one card, one page scroll, floating sticky preview */
-.editor-shell {
+/* Offer editor — one card, one document scroll, sticky preview column */
+.editor-workspace {
   overflow: visible;
+}
+
+.editor-workspace-toolbar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--pb-border);
 }
 
 .editor-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) 340px;
   align-items: start;
-  padding: 20px;
+  overflow: visible;
 }
 
-.editor-panel {
+.editor-main {
   display: flex;
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  padding: 20px;
+  overflow: visible;
 }
 
-.editor-preview-float {
+.editor-preview-aside {
+  position: -webkit-sticky;
   position: sticky;
-  top: calc(var(--pb-header-h) + 16px);
+  top: calc(var(--pb-header-h) + 12px);
   align-self: start;
-  z-index: 5;
-  background: var(--pb-surface);
-  border: 1px solid var(--pb-border);
-  border-radius: var(--pb-radius);
-  box-shadow: var(--pb-shadow-lg);
-  max-height: calc(100vh - var(--pb-header-h) - 32px);
-  overflow-y: auto;
+  padding: 20px;
+  border-left: 1px solid var(--pb-border);
+  background: var(--pb-surface-2);
+  overflow: visible;
 }
 
-.editor-preview-header {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--pb-border);
+.editor-preview-label {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  background: var(--pb-surface);
+  margin-bottom: 12px;
+  font-size: 0.875rem;
 }
 
-.editor-preview-body {
-  display: flex;
-  justify-content: center;
-  padding: 16px;
-}
-
-.editor-preview-device {
-  max-width: 100%;
+.editor-preview-canvas {
+  margin: 0 auto;
   border: 1px solid var(--pb-border);
   border-radius: 12px;
-  overflow: hidden;
   background: #fff;
+  overflow: visible;
 }
 
 .editor-tabs {
@@ -761,12 +761,11 @@ a {
 @media (max-width: 1024px) {
   .editor-layout {
     grid-template-columns: 1fr;
-    padding: 16px;
   }
 
-  .editor-preview-float {
-    top: calc(var(--pb-header-h) + 12px);
-    max-height: calc(100vh - var(--pb-header-h) - 24px);
+  .editor-preview-aside {
+    border-left: none;
+    border-top: 1px solid var(--pb-border);
   }
 }
 
