@@ -175,9 +175,9 @@ export function cartProductIds(cart: EcwidCart | null): string[] {
   return [...ids];
 }
 
+/** `cart.id` is the order id, not a cart id — only `cartId` maps to the REST /carts resource. */
 export function cartIdFrom(cart: EcwidCart | null): string | undefined {
-  if (!cart) return undefined;
-  return cart.cartId ?? cart.id ?? undefined;
+  return cart?.cartId ?? undefined;
 }
 
 export function cartLineSnapshots(cart: EcwidCart | null): CartLineSnapshotPayload[] {

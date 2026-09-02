@@ -7,8 +7,7 @@ import { qs, withTimeout, asCopyText } from '../utils';
 import { applyWidgetStyle, mirrorNativeAtcTheme } from './widget-style-css';
 
 const PB_STAMP_KEYS = new Set(['pbOfferId', 'pbDealId', 'pbKind']);
-const ECWID_ADD_TIMEOUT_MS = 8000;
-const ECWID_ADD_GAP_MS = 250;
+const ECWID_ADD_TIMEOUT_MS = 4000;
 
 export interface WidgetShellState {
   view: StorefrontWidgetView;
@@ -71,29 +70,20 @@ export async function addDiscountedAndRefresh(
   const cartId = cartIdFrom(cart);
   const result = await addDiscounted({ ruleId, lines, cartId });
 
-  if (result.serverAdded) {
-    await refreshCart();
-    await new Promise((resolve) => window.setTimeout(resolve, 400));
-    await refreshCart();
-    document.dispatchEvent(new CustomEvent('pb-cart-changed'));
-    return;
-  }
-
-  const ecwidLines =
-    result.ecwidLines?.length
-      ? result.ecwidLines
-      : pricedLinesToEcwidLines(result.lines ?? []);
+  const ecwidLines = result.ecwidLines?.length
+    ? result.ecwidLines
+    : pricedLinesToEcwidLines(result.lines ?? []);
 
   if (!ecwidLines.length) {
     throw new Error('Could not add to cart.');
   }
 
   await addEcwidLines(ecwidLines);
-  await refreshCart();
-  // Second refresh helps Ecwid pick up server-calculated bundle discounts (discountUrl).
-  await new Promise((resolve) => window.setTimeout(resolve, 400));
-  await refreshCart();
+
+  // addEcwidLines already refreshed; this second pass lets Ecwid pick up the
+  // server-calculated bundle discount (discountUrl) without blocking the success state.
   document.dispatchEvent(new CustomEvent('pb-cart-changed'));
+  window.setTimeout(() => void refreshCart(), 400);
 }
 
 function pricedLinesToEcwidLines(lines: PricedLineResponse[]): EcwidCartLinePayload[] {
@@ -123,43 +113,131 @@ function toEcwidAddPayload(line: EcwidCartLinePayload): EcwidAddProductPayload {
   };
 }
 
+type EcwidCartApi = NonNullable<NonNullable<ReturnType<typeof getEcwid>>['Cart']>;
+
+interface BundleTarget {
+  line: EcwidCartLinePayload;
+  variantOptions?: Record<string, string>;
+  wanted: number;
+  /** Cart quantity before the add, matched with and without the variant options. */
+  baseline: number;
+  baselineAnyOption: number;
+}
+
+function targetKey(productId: number, options?: Record<string, string>): string {
+  const entries = Object.entries(options ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  return `${productId}|${entries.map(([k, v]) => `${k}=${v}`).join('&')}`;
+}
+
+/**
+ * Ecwid has no batch cart API — neither the storefront JS nor REST can add several items
+ * in one call — so the whole bundle is dispatched in a single concurrent pass and verified
+ * once against the resulting cart. Adding line by line with a verification round-trip per
+ * line is what made a three-item bundle take the better part of a minute.
+ */
 async function addEcwidLines(lines: EcwidCartLinePayload[]): Promise<void> {
   const cartApi = getEcwid()?.Cart;
   if (!cartApi?.addProduct) {
     throw new Error('Ecwid cart is not available.');
   }
 
-  let addedCount = 0;
+  const targets = new Map<string, BundleTarget>();
   for (const line of lines) {
-    const added = await addEcwidLineWithFallbacks(cartApi, line);
-    if (added) addedCount += 1;
-    await new Promise((resolve) => window.setTimeout(resolve, ECWID_ADD_GAP_MS));
+    const variantOptions = stripStampOptions(line.options);
+    const key = targetKey(line.productId, variantOptions);
+    const existing = targets.get(key);
+    if (existing) existing.wanted += line.quantity;
+    else {
+      targets.set(key, {
+        line,
+        variantOptions,
+        wanted: line.quantity,
+        baseline: 0,
+        baselineAnyOption: 0,
+      });
+    }
   }
 
-  if (addedCount === 0) {
+  const before = await getCart();
+  for (const target of targets.values()) {
+    target.baseline = lineQtyInCart(before, target.line.productId, target.variantOptions);
+    target.baselineAnyOption = lineQtyInCart(before, target.line.productId);
+  }
+
+  let pending = [...targets.values()].map((target) => ({ target, missing: target.wanted }));
+
+  // Each pass drops one payload feature that Ecwid may reject: selectedPrice needs
+  // nameYourPriceEnabled on the product, and options must match a real variation.
+  const passes: ((target: BundleTarget, missing: number) => EcwidCartLinePayload)[] = [
+    (target, missing) => ({ ...target.line, quantity: missing, options: target.variantOptions }),
+    (target, missing) => ({
+      ...target.line,
+      quantity: missing,
+      options: target.variantOptions,
+      selectedPrice: undefined,
+    }),
+    (target, missing) => ({
+      ...target.line,
+      quantity: missing,
+      options: undefined,
+      selectedPrice: undefined,
+    }),
+  ];
+
+  for (let pass = 0; pass < passes.length && pending.length > 0; pass++) {
+    const build = passes[pass]!;
+    await Promise.all(
+      pending.map(({ target, missing }) => dispatchAdd(cartApi, build(target, missing))),
+    );
+    await refreshCart();
+
+    // The final pass drops options, so matching lines can no longer be identified by them.
+    const ignoreOptions = pass === passes.length - 1;
+    pending = await measureShortfalls([...targets.values()], ignoreOptions);
+  }
+
+  if (pending.length === targets.size) {
     throw new Error('Could not add to cart.');
   }
-  if (lines.length > 1 && addedCount < lines.length) {
-    throw new Error(`Only ${addedCount} of ${lines.length} bundle items were added to the cart.`);
+  if (pending.length > 0) {
+    const added = targets.size - pending.length;
+    throw new Error(`Only ${added} of ${targets.size} bundle items were added to the cart.`);
   }
 }
 
-async function addEcwidLineWithFallbacks(
-  cartApi: NonNullable<NonNullable<ReturnType<typeof getEcwid>>['Cart']>,
-  line: EcwidCartLinePayload,
-): Promise<boolean> {
-  const variantOptions = stripStampOptions(line.options);
-  const attempts: EcwidCartLinePayload[] = [
-    { ...line, options: variantOptions },
-    { ...line, options: variantOptions, selectedPrice: undefined },
-    { ...line, options: undefined, selectedPrice: undefined },
-    { ...line, options: undefined },
-  ];
+async function measureShortfalls(
+  targets: BundleTarget[],
+  ignoreOptions: boolean,
+): Promise<{ target: BundleTarget; missing: number }[]> {
+  const cart = await getCart();
+  const shortfalls: { target: BundleTarget; missing: number }[] = [];
 
-  for (const attempt of attempts) {
-    if (await tryAddEcwidLine(cartApi, attempt)) return true;
+  for (const target of targets) {
+    const baseline = ignoreOptions ? target.baselineAnyOption : target.baseline;
+    const options = ignoreOptions ? undefined : target.variantOptions;
+    const current = lineQtyInCart(cart, target.line.productId, options);
+    const missing = baseline + target.wanted - current;
+    if (missing > 0) shortfalls.push({ target, missing });
   }
-  return false;
+
+  return shortfalls;
+}
+
+function dispatchAdd(cartApi: EcwidCartApi, line: EcwidCartLinePayload): Promise<void> {
+  return withTimeout(
+    new Promise<void>((resolve) => {
+      cartApi.addProduct!(toEcwidAddPayload(line), (success, _product, _cart, error) => {
+        if (!success) {
+          console.warn('[pb-bundles] Ecwid addProduct failed', line, error);
+        }
+        resolve();
+      });
+    }),
+    // Instant Site sometimes applies the add without ever invoking the callback, so this
+    // is a floor on progress, not a failure signal — the cart check below decides.
+    ECWID_ADD_TIMEOUT_MS,
+    undefined,
+  );
 }
 
 function cartItemMatchesLine(
@@ -185,35 +263,6 @@ function lineQtyInCart(
     if (!cartItemMatchesLine(item, productId, options)) return sum;
     return sum + Math.max(0, Number(item.quantity ?? 0));
   }, 0);
-}
-
-async function tryAddEcwidLine(
-  cartApi: NonNullable<NonNullable<ReturnType<typeof getEcwid>>['Cart']>,
-  line: EcwidCartLinePayload,
-): Promise<boolean> {
-  const payload = toEcwidAddPayload(line);
-  const variantOptions = stripStampOptions(line.options);
-  const qtyBefore = lineQtyInCart(await getCart(), payload.id, variantOptions);
-
-  await withTimeout(
-    new Promise<void>((resolve) => {
-      cartApi.addProduct!(payload, (success, _product, _cart, error) => {
-        if (!success) {
-          console.warn('[pb-bundles] Ecwid addProduct failed', payload, error);
-        }
-        resolve();
-      });
-    }),
-    ECWID_ADD_TIMEOUT_MS,
-    undefined,
-  );
-
-  // Instant Site often applies the add but never invokes the callback on chained calls.
-  await new Promise((resolve) => window.setTimeout(resolve, 500));
-  await refreshCart();
-
-  const qtyAfter = lineQtyInCart(await getCart(), payload.id, variantOptions);
-  return qtyAfter >= qtyBefore + payload.quantity;
 }
 
 export function showWidgetError(root: HTMLElement, message: string): void {

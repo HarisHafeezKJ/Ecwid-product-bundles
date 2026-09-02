@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { BundleRule } from '@pb/shared';
 import { parseBundleItems } from '@pb/shared';
-import { addToCart, ensureNameYourPriceEnabled } from '../../lib/ecwid.js';
+import { ensureNameYourPriceEnabled } from '../../lib/ecwid.js';
 import { pricedLinesToEcwidCartLines } from '../../lib/ecwid-cart-lines.js';
 import { priceLinesForRule, type PriceLineInput } from '../../lib/price-lines-for-rule.js';
 import { resolveStorefrontBundleRule } from '../../lib/storefront-rules.js';
@@ -90,29 +90,16 @@ addDiscountedRouter.post('/', async (req, res) => {
     }
 
     const priced = await priceLinesForRule(tokens, rule, normalized);
-    const result = await addToCart(
-      tokens,
-      cartId,
-      priced.map((p) => ({
-        productId: p.productId,
-        variantId: p.variantId,
-        quantity: p.quantity,
-        unitPrice: p.unitPrice,
-        options: p.options,
-      })),
-    );
 
-    const ecwidLines = pricedLinesToEcwidCartLines(priced);
-    const serverAdded = cartId != null && result.addedCount >= priced.length;
-    const failedLines = result.lineResults.filter((row) => !row.added);
-
+    // Ecwid exposes no REST endpoint for writing to a live storefront cart — /carts only
+    // reads and updates abandoned carts. The storefront applies these lines through
+    // Ecwid.Cart.addProduct instead.
     jsonResponse(res, req, {
-      ok: !cartId || serverAdded,
-      cartId: result.cartId,
+      ok: true,
+      cartId,
       lines: priced,
-      ecwidLines,
-      serverAdded,
-      ...(failedLines.length > 0 ? { failedLines } : {}),
+      ecwidLines: pricedLinesToEcwidCartLines(priced),
+      serverAdded: false,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Could not add to cart';
