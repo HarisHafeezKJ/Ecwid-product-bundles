@@ -265,8 +265,8 @@ export async function ensureNameYourPriceEnabled(
   );
 }
 
-/** Hidden TEXT option — different `_pbDeal` values keep each offer on its own cart line. */
-export async function ensureDealStampOption(
+/** Remove legacy `_pbDeal` catalog options (stamps now embed in variant values at add-to-cart). */
+export async function removeDealStampOption(
   tokens: EcwidStoreTokens,
   productIds: string[],
 ): Promise<void> {
@@ -282,41 +282,17 @@ export async function ensureDealStampOption(
           `/products/${productId}`,
         );
         const options = Array.isArray(raw.options) ? raw.options : [];
-        if (options.some((row) => (row as Record<string, unknown>).name === PB_DEAL_TEXT_OPTION)) {
-          const existing = options.find(
-            (row) => (row as Record<string, unknown>).name === PB_DEAL_TEXT_OPTION,
-          ) as Record<string, unknown> | undefined;
-          if (existing?.required) {
-            await ecwidFetch(tokens.storeId, tokens.accessToken, `/products/${productId}`, {
-              method: 'PUT',
-              body: JSON.stringify({
-                options: options.map((row) => {
-                  const opt = row as Record<string, unknown>;
-                  if (opt.name !== PB_DEAL_TEXT_OPTION) return row;
-                  return { ...opt, required: false, title: '\u200B' };
-                }),
-              }),
-            });
-          }
-          return;
-        }
+        const filtered = options.filter(
+          (row) => (row as Record<string, unknown>).name !== PB_DEAL_TEXT_OPTION,
+        );
+        if (filtered.length === options.length) return;
 
         await ecwidFetch(tokens.storeId, tokens.accessToken, `/products/${productId}`, {
           method: 'PUT',
-          body: JSON.stringify({
-            options: [
-              ...options,
-              {
-                type: 'TEXTFIELD',
-                name: PB_DEAL_TEXT_OPTION,
-                title: '\u200B',
-                required: false,
-              },
-            ],
-          }),
+          body: JSON.stringify({ options: filtered }),
         });
       } catch (err) {
-        console.warn('[pb] ensureDealStampOption failed', productId, err);
+        console.warn('[pb] removeDealStampOption failed', productId, err);
       }
     }),
   );

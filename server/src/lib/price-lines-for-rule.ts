@@ -8,7 +8,7 @@ import {
   isTierDiscountable,
   mixPoolProductIds,
   parseBundleItems,
-  stampOptions,
+  stampIntoVariantOptions,
   volumeUnitPrice,
   bestVolumeTier,
 } from '@pb/shared';
@@ -87,14 +87,6 @@ async function unitPriceForProduct(
   }
 
   return { product, unitPrice: product.price };
-}
-
-function mergeCartOptions(
-  variantOptions?: Record<string, string>,
-  stamp?: Record<string, string>,
-): Record<string, string> | undefined {
-  const merged = { ...(variantOptions ?? {}), ...(stamp ?? {}) };
-  return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
 function dealIdFor(rule: BundleRule, suffix: string): string {
@@ -201,10 +193,7 @@ async function priceFixedBundle(
         offerId: rule.id,
         dealId,
         promoLabel,
-        options: mergeCartOptions(
-          variantOptions,
-          stampOptions(rule.id, dealId, 'pb-combo'),
-        ),
+        options: stampIntoVariantOptions(variantOptions, rule.id, dealId, 'pb-combo'),
       };
     }),
   );
@@ -262,10 +251,7 @@ async function priceVolumeDiscount(
         offerId: rule.id,
         dealId,
         promoLabel,
-        options: mergeCartOptions(
-          variantOptions,
-          stampOptions(rule.id, dealId, 'pb-volume'),
-        ),
+        options: stampIntoVariantOptions(variantOptions, rule.id, dealId, 'pb-volume'),
       };
     }),
   );
@@ -307,10 +293,7 @@ async function priceMixMatch(
         offerId: rule.id,
         dealId,
         promoLabel,
-        options: mergeCartOptions(
-          variantOptions,
-          stampOptions(rule.id, dealId, 'pb-mix'),
-        ),
+        options: stampIntoVariantOptions(variantOptions, rule.id, dealId, 'pb-mix'),
       };
     }),
   );

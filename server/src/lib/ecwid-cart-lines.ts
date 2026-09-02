@@ -24,7 +24,7 @@ export function stripStampOptions(options?: Record<string, string>): Record<stri
  * (`/api/webhooks/discount`) — that's the supported path for discounted lines that Ecwid
  * won't second-guess.
  *
- * The hidden `_pbDeal` TEXT option is kept so each offer becomes a separate cart line.
+ * Variant options plus an invisible deal stamp embedded at add-to-cart from offer widgets.
  */
 export function pricedLinesToEcwidCartLines(priced: PricedLine[]): EcwidCartLinePayload[] {
   return priced.map((line) => {

@@ -14,7 +14,6 @@ import {
   whenEcwidReady,
 } from './ecwid';
 import { initProductWidgets, teardownProductWidgets } from './product-widget';
-import { startDealStampUiGuard } from './deal-stamp-ui';
 import { isInstantSiteHost } from './instant-site';
 import type { EcwidPage } from './types';
 import { injectStyles } from './utils';
@@ -71,7 +70,6 @@ function bootstrap(): void {
   initialized = true;
 
   injectStyles('pb-cart-upsell-styles', cartUpsellCss);
-  startDealStampUiGuard(injectStyles);
   readScriptConfig();
   resolveApiBaseUrl();
 

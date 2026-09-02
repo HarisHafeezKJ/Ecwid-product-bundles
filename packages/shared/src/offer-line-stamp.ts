@@ -2,8 +2,11 @@ export const PB_OFFER_OPTION = 'pbOfferId';
 export const PB_DEAL_OPTION = 'pbDealId';
 export const PB_KIND_OPTION = 'pbKind';
 
-/** Hidden TEXT product option — different values split the same SKU into separate cart lines. */
+/** @deprecated Legacy catalog option — removed; stamps embed in variant values instead. */
 export const PB_DEAL_TEXT_OPTION = '_pbDeal';
+
+/** Invisible marker appended to a variant option value at add-to-cart (never shown on PDP). */
+export const DEAL_STAMP_SUFFIX = '\u200B\u200C';
 
 /** Invisible Unicode used as a secondary stamp in line descriptions when options are unavailable. */
 export const OFFER_MARK_PREFIX = '\u200B\u200C';
@@ -40,22 +43,62 @@ export function decodeDealStampValue(value: string): {
   };
 }
 
+export function stripDealStampFromOptionValue(value: string): string {
+  const idx = value.indexOf(DEAL_STAMP_SUFFIX);
+  return idx >= 0 ? value.slice(0, idx) : value;
+}
+
+export function stripDealStampFromOptions(
+  options?: Record<string, string>,
+): Record<string, string> | undefined {
+  if (!options) return undefined;
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(options)) {
+    if (key === PB_DEAL_TEXT_OPTION) continue;
+    const cleaned = stripDealStampFromOptionValue(value);
+    if (cleaned) out[key] = cleaned;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * Attach offer/deal metadata to cart line options when adding from an offer widget.
+ * Embeds an invisible suffix on the first variant option (e.g. Size) so Ecwid keeps each
+ * deal on its own cart line without adding anything to the product page.
+ */
+export function stampIntoVariantOptions(
+  variantOptions: Record<string, string> | undefined,
+  offerId: string,
+  dealId?: string,
+  kind?: string,
+): Record<string, string> | undefined {
+  const stamp = encodeDealStampValue(offerId, dealId, kind);
+  const base = variantOptions ?? {};
+  const keys = Object.keys(base);
+  if (keys.length === 0) return undefined;
+
+  const key = keys[0]!;
+  return {
+    ...base,
+    [key]: `${base[key]}${DEAL_STAMP_SUFFIX}${stamp}`,
+  };
+}
+
+/** @deprecated Use stampIntoVariantOptions */
 export function stampOptions(
   offerId: string,
   dealId?: string,
   kind?: string,
 ): Record<string, string> {
-  return {
-    [PB_DEAL_TEXT_OPTION]: encodeDealStampValue(offerId, dealId, kind),
-  };
+  return stampIntoVariantOptions({}, offerId, dealId, kind) ?? {};
 }
 
-/** Variant options plus the `_pbDeal` stamp sent to Ecwid `Cart.addProduct`. */
+/** Options sent to Ecwid `Cart.addProduct` (variant choices + embedded deal stamp). */
 export function ecwidCartOptions(options?: Record<string, string>): Record<string, string> | undefined {
   if (!options) return undefined;
   const merged: Record<string, string> = {};
   for (const [key, value] of Object.entries(options)) {
-    if (LEGACY_STAMP_KEYS.has(key)) continue;
+    if (LEGACY_STAMP_KEYS.has(key) || key === PB_DEAL_TEXT_OPTION) continue;
     if (value) merged[key] = value;
   }
   return Object.keys(merged).length > 0 ? merged : undefined;
@@ -74,22 +117,30 @@ export function optionsFromSelectedOptions(selected: unknown): Record<string, st
   return map;
 }
 
-/**
- * Ecwid limitation: custom per-line sale prices are not available on every plan/API path.
- * We stamp offer/deal ids in a hidden TEXT product option so Ecwid keeps each deal on its
- * own cart line and the discount webhook can price bundle vs quantity-break independently.
- */
 export function readStampFromOptions(options?: Record<string, string>): {
   offerId?: string;
   dealId?: string;
   kind?: string;
 } {
   if (!options) return {};
-  const dealStamp = options[PB_DEAL_TEXT_OPTION];
-  if (dealStamp) return decodeDealStampValue(dealStamp);
-  return {
-    offerId: options[PB_OFFER_OPTION],
-    dealId: options[PB_DEAL_OPTION],
-    kind: options[PB_KIND_OPTION],
-  };
+
+  const legacyDeal = options[PB_DEAL_TEXT_OPTION];
+  if (legacyDeal) return decodeDealStampValue(legacyDeal);
+
+  if (options[PB_OFFER_OPTION]) {
+    return {
+      offerId: options[PB_OFFER_OPTION],
+      dealId: options[PB_DEAL_OPTION],
+      kind: options[PB_KIND_OPTION],
+    };
+  }
+
+  for (const value of Object.values(options)) {
+    const idx = value.indexOf(DEAL_STAMP_SUFFIX);
+    if (idx >= 0) {
+      return decodeDealStampValue(value.slice(idx + DEAL_STAMP_SUFFIX.length));
+    }
+  }
+
+  return {};
 }

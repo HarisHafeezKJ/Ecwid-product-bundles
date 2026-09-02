@@ -19,7 +19,7 @@ import {
   writePublicConfig,
   writeStorageJson,
 } from '../storage/ecwid-storage.js';
-import { ensureDealStampOption } from '../ecwid.js';
+import { removeDealStampOption } from '../ecwid.js';
 import { mapStoredRule, ruleInputFromBody, type StoredRuleRow, type StoredRulesDoc } from './mappers.js';
 import { serializeRulesForPublicConfig } from './public-rules.js';
 
@@ -101,14 +101,14 @@ export async function listActiveRulesForStore(
     .map(mapStoredRule);
 }
 
-async function ensureDealStampForRule(
+async function removeLegacyDealStampForRule(
   storeId: string,
   rule: BundleRule,
   components: Array<{ productId: string }>,
   sessionAccessToken?: string,
 ): Promise<void> {
   const tokens = await resolveStoreTokens(storeId, sessionAccessToken);
-  await ensureDealStampOption(tokens, [
+  await removeDealStampOption(tokens, [
     ...components.map((component) => component.productId),
     rule.targetProductId,
     rule.primaryProductId,
@@ -202,7 +202,7 @@ export async function saveBundleRule(
     };
     await saveRulesDoc(storeId, doc, sessionAccessToken);
     const saved = mapStoredRule(doc.rules[idx]!);
-    await ensureDealStampForRule(storeId, saved, items.components, sessionAccessToken);
+    await removeLegacyDealStampForRule(storeId, saved, items.components, sessionAccessToken);
     return saved;
   }
 
@@ -215,7 +215,7 @@ export async function saveBundleRule(
   doc.rules.push(row);
   await saveRulesDoc(storeId, doc, sessionAccessToken);
   const saved = mapStoredRule(row);
-  await ensureDealStampForRule(storeId, saved, items.components, sessionAccessToken);
+  await removeLegacyDealStampForRule(storeId, saved, items.components, sessionAccessToken);
   return saved;
 }
 

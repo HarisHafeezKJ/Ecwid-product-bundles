@@ -1,4 +1,4 @@
-import { bundleUsesPerUnitVariantPickers, ecwidCartOptions } from '@pb/shared';
+import { bundleUsesPerUnitVariantPickers, ecwidCartOptions, stripDealStampFromOptionValue } from '@pb/shared';
 import type { StorefrontWidgetView, VariantOption, WidgetProductItem } from '../types';
 import { addDiscounted } from '../api';
 import { cartIdFrom, getCart, refreshCart } from '../ecwid';
@@ -271,7 +271,14 @@ function cartItemMatchesLine(
   if (!options || Object.keys(options).length === 0) return true;
 
   const itemOptions = item.options ?? item.selectedOptions ?? {};
-  return Object.entries(options).every(([key, value]) => itemOptions[key] === value);
+  return Object.entries(options).every(([key, value]) => {
+    const cartValue = itemOptions[key];
+    if (cartValue == null) return false;
+    return (
+      cartValue === value ||
+      stripDealStampFromOptionValue(cartValue) === stripDealStampFromOptionValue(value)
+    );
+  });
 }
 
 function lineQtyInCart(

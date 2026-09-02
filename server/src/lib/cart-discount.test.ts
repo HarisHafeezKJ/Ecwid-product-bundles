@@ -182,10 +182,8 @@ describe('calculateCartDiscounts', () => {
       },
     });
 
-    const dealStamp = (offerId: string, dealId: string, kind: string) => ({
-      selectedOptions: [
-        { name: '_pbDeal', value: [offerId, dealId, kind].join('\x1f') },
-      ],
+    const dealStamp = (offerId: string, dealId: string, kind: string, size: string) => ({
+      selectedOptions: [{ name: 'Size', value: `${size}\u200B\u200C${[offerId, dealId, kind].join('\x1f')}` }],
     });
 
     const result = calculateCartDiscounts(
@@ -195,19 +193,19 @@ describe('calculateCartDiscounts', () => {
           productId: 42,
           quantity: 2,
           productPrice: 50,
-          ...dealStamp(bundle.id, `${bundle.id}:bundle`, 'pb-combo'),
+          ...dealStamp(bundle.id, `${bundle.id}:bundle`, 'pb-combo', 'S'),
         },
         {
           productId: 99,
           quantity: 2,
           productPrice: 20,
-          ...dealStamp(bundle.id, `${bundle.id}:bundle`, 'pb-combo'),
+          ...dealStamp(bundle.id, `${bundle.id}:bundle`, 'pb-combo', 'S'),
         },
         {
           productId: 42,
           quantity: 5,
           productPrice: 50,
-          ...dealStamp(volume.id, `${volume.id}:vol-5`, 'pb-volume'),
+          ...dealStamp(volume.id, `${volume.id}:vol-5`, 'pb-volume', 'S'),
         },
       ],
     );
