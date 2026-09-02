@@ -16,8 +16,8 @@ interface PreviewFrameProps {
 
 export default function PreviewFrame({ device, onDeviceChange, children }: PreviewFrameProps) {
   return (
-    <div className="card editor-preview">
-      <div className="card-header editor-preview-header">
+    <aside className="editor-preview-float" aria-label="Live store preview">
+      <div className="editor-preview-header">
         <strong>Live Store Preview</strong>
         <div className="segmented">
           {(['desktop', 'tablet', 'mobile'] as PreviewDevice[]).map((d) => (
@@ -32,14 +32,11 @@ export default function PreviewFrame({ device, onDeviceChange, children }: Previ
           ))}
         </div>
       </div>
-      <div className="card-body editor-preview-body">
-        <div
-          className="editor-preview-device"
-          style={{ width: WIDTHS[device] }}
-        >
+      <div className="editor-preview-body">
+        <div className="editor-preview-device" style={{ width: WIDTHS[device] }}>
           {children}
         </div>
       </div>
-    </div>
+    </aside>
   );
 }

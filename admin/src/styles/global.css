@@ -401,58 +401,56 @@ a {
   padding: 20px;
 }
 
-/* Offer editor: split-pane — settings scroll, preview stays visible */
-.editor-page {
-  display: flex;
-  flex-direction: column;
-  height: calc(100vh - var(--pb-header-h) - 48px);
-  max-height: calc(100vh - var(--pb-header-h) - 48px);
-  min-height: 0;
-}
-
-.editor-chrome {
-  flex-shrink: 0;
+/* Offer editor: one card, one page scroll, floating sticky preview */
+.editor-shell {
+  overflow: visible;
 }
 
 .editor-layout {
   display: grid;
-  grid-template-columns: 1fr 380px;
-  gap: 20px;
-  flex: 1;
-  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 24px;
+  align-items: start;
+  padding: 20px;
 }
 
 .editor-panel {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 4px;
+  min-width: 0;
 }
 
-.editor-preview {
+.editor-preview-float {
   position: sticky;
-  top: 0;
+  top: calc(var(--pb-header-h) + 16px);
   align-self: start;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  max-height: 100%;
-  min-height: 0;
+  z-index: 5;
+  background: var(--pb-surface);
+  border: 1px solid var(--pb-border);
+  border-radius: var(--pb-radius);
+  box-shadow: var(--pb-shadow-lg);
+  max-height: calc(100vh - var(--pb-header-h) - 32px);
+  overflow-y: auto;
 }
 
 .editor-preview-header {
-  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--pb-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--pb-surface);
 }
 
 .editor-preview-body {
   display: flex;
   justify-content: center;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
+  padding: 16px;
 }
 
 .editor-preview-device {
@@ -761,24 +759,14 @@ a {
 }
 
 @media (max-width: 1024px) {
-  .editor-page {
-    height: auto;
-    max-height: none;
-  }
-
-  .editor-panel {
-    overflow-y: visible;
-    padding-right: 0;
-  }
-
   .editor-layout {
     grid-template-columns: 1fr;
+    padding: 16px;
   }
 
-  .editor-preview {
-    position: sticky;
-    top: calc(var(--pb-header-h) + 16px);
-    max-height: calc(100vh - var(--pb-header-h) - 32px);
+  .editor-preview-float {
+    top: calc(var(--pb-header-h) + 12px);
+    max-height: calc(100vh - var(--pb-header-h) - 24px);
   }
 }
 

@@ -86,8 +86,7 @@ export default function OfferEditor({ initialDraft, onClose, onDirtyChange }: Of
   };
 
   return (
-    <div className="editor-page">
-      <div className="editor-chrome">
+    <div>
       {restoreOffer && (
         <div className="info-banner" style={{ marginBottom: 16 }}>
           <span>You have an unsaved draft for this offer.</span>
@@ -177,11 +176,11 @@ export default function OfferEditor({ initialDraft, onClose, onDirtyChange }: Of
           </ul>
         </div>
       )}
-      </div>
 
-      <div className="editor-layout">
-        <div className="editor-panel">
-          <div className="editor-tabs">
+      <div className="card editor-shell">
+        <div className="editor-layout">
+          <div className="editor-panel">
+            <div className="editor-tabs">
             <button
               type="button"
               className={tab === 'setup' ? 'active' : ''}
@@ -208,11 +207,12 @@ export default function OfferEditor({ initialDraft, onClose, onDirtyChange }: Of
           ) : (
             <EditorStyle draft={draft} onStyleChange={patchStyle} onChange={patchDraft} />
           )}
-        </div>
+          </div>
 
-        <PreviewFrame device={device} onDeviceChange={setDevice}>
-          <StorefrontPreview draft={draft} />
-        </PreviewFrame>
+          <PreviewFrame device={device} onDeviceChange={setDevice}>
+            <StorefrontPreview draft={draft} />
+          </PreviewFrame>
+        </div>
       </div>
 
       {discardOpen && (
