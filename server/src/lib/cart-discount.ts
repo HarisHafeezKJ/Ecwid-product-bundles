@@ -2,6 +2,7 @@ import type { BundleRule, CartQtyLine } from '@pb/shared';
 import {
   bestVolumeTier,
   bundleLineSale,
+  cartQtyForProduct,
   discountDisplayName,
   discountDisplayNameWithCount,
   exactVolumeTier,
@@ -138,12 +139,20 @@ function volumeDiscountForRule(
     ? null
     : new Set((rule.items?.components ?? []).map((c) => c.productId));
 
+  const tierByProduct = new Map<string, NonNullable<ReturnType<typeof exactVolumeTier>>>();
+  for (const line of lines) {
+    if (pool && !pool.has(line.productId) && line.productId !== rule.targetProductId) continue;
+    if (tierByProduct.has(line.productId)) continue;
+    const tier = exactVolumeTier(tiers, cartQtyForProduct(lines, line.productId));
+    if (tier) tierByProduct.set(line.productId, tier);
+  }
+
   const productIds: number[] = [];
   let savings = 0;
 
   for (const line of lines) {
     if (pool && !pool.has(line.productId) && line.productId !== rule.targetProductId) continue;
-    const tier = exactVolumeTier(tiers, line.quantity);
+    const tier = tierByProduct.get(line.productId);
     if (!tier) continue;
 
     const catalog = catalogUnitPrice(items, line.productId);

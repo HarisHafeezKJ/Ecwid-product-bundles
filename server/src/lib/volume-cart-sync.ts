@@ -113,7 +113,12 @@ export async function syncVolumeCart(
 
     if (rule.ruleType === 'VOLUME_DISCOUNT') {
       const tiers = (rule.volumeTiers?.tiers ?? []).filter(isTierDiscountable);
-      const tier = exactVolumeTier(tiers, line.quantity);
+      const offerLines = parsed.filter((row) => {
+        const rowOfferId = row.offerId ?? readStampFromOptions(row.options).offerId;
+        return rowOfferId === offerId && row.productId === line.productId;
+      });
+      const totalQty = offerLines.reduce((sum, row) => sum + row.quantity, 0);
+      const tier = exactVolumeTier(tiers, totalQty);
       if (!tier) {
         plans.push({
           lineIndex: i,

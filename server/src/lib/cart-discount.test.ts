@@ -62,6 +62,20 @@ describe('calculateCartDiscounts', () => {
     assert.ok(result.discounts[0]!.value > 0);
   });
 
+  it('applies volume discount when tier qty is split across cart lines', () => {
+    const rule = volumeRule({
+      volumeTiers: {
+        tiers: [{ qty: 5, discountType: 'PERCENTAGE', discountValue: 10, title: '5+' }],
+      },
+    });
+    const result = calculateCartDiscounts(
+      [rule],
+      Array.from({ length: 5 }, () => ({ productId: 42, quantity: 1, productPrice: 20 })),
+    );
+    assert.ok(result.discounts.length > 0);
+    assert.ok(result.discounts[0]!.value > 0);
+  });
+
   it('discounts only bundle-defined quantities when cart has excess units', () => {
     const rule = fixedBundleRule([
       { productId: '101', minQuantity: 2, price: 50 },

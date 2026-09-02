@@ -1,6 +1,7 @@
 import type { BundleRule, CatalogProduct, PricedLine } from '@pb/shared';
 import {
   bundleLineSale,
+  cartQtyForProduct,
   discountDisplayName,
   exactVolumeTier,
   exactVolumeUnitPrice,
@@ -221,13 +222,26 @@ async function priceVolumeDiscount(
 
   const pool = rule.applyToAllProducts ? null : new Set(mixPoolProductIds(rule));
 
+  // Per-unit variant pickers send one line per unit (qty 1 each). Match tiers on the
+  // total quantity for the product across all lines, not each line individually.
+  const tierByProduct = new Map<string, NonNullable<ReturnType<typeof exactVolumeTier>>>();
+  for (const line of lines) {
+    if (pool && !pool.has(line.productId) && line.productId !== rule.targetProductId) {
+      throw new Error('Product is not in this quantity break');
+    }
+    if (tierByProduct.has(line.productId)) continue;
+    const tier = exactVolumeTier(tiers, cartQtyForProduct(lines, line.productId));
+    if (!tier) throw new Error('Quantity break is not available');
+    tierByProduct.set(line.productId, tier);
+  }
+
   return Promise.all(
     lines.map(async (line) => {
       if (pool && !pool.has(line.productId) && line.productId !== rule.targetProductId) {
         throw new Error('Product is not in this quantity break');
       }
 
-      const tier = exactVolumeTier(tiers, line.quantity);
+      const tier = tierByProduct.get(line.productId);
       if (!tier) throw new Error('Quantity break is not available');
 
       const { unitPrice: catalogPrice, variantOptions } = await unitPriceForProduct(
