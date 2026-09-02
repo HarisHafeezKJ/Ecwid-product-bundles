@@ -6,7 +6,6 @@ import {
   listBundleRules,
   saveBundleRule,
   setBundleStatus,
-  syncRulesToPublicConfigForStore,
 } from '../../lib/db/rules.js';
 import { CLIENT_ERRORS, failResponse, isClientError, jsonResponse } from '../../lib/api-response.js';
 import { requireDashboardAuth } from '../../lib/auth.js';
@@ -25,10 +24,9 @@ rulesRouter.get('/', async (req, res) => {
   try {
     const storeId = req.session!.storeId!;
     const token = sessionToken(req);
+    // Public-config sync happens inside every save/update/delete flow, so listing
+    // the dashboard does not need to trigger an additional storage PUT per view.
     const rules = await listBundleRules(storeId, token);
-    void syncRulesToPublicConfigForStore(storeId, token).catch((err) => {
-      console.warn('syncRulesToPublicConfig failed', err);
-    });
     jsonResponse(res, req, { rules });
   } catch (err) {
     console.error('GET /api/dashboard/rules failed', err);

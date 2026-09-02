@@ -23,8 +23,32 @@
 }
 
 .pb-loading {
-  color: #6b7280;
-  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.pb-loading__shimmer {
+  height: 72px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: pb-shimmer 1.2s ease-in-out infinite;
+}
+
+.pb-loading__shimmer--short {
+  height: 48px;
+  width: 70%;
+}
+
+@keyframes pb-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .pb-offer-mount + .pb-offer-mount {

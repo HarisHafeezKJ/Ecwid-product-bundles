@@ -2,6 +2,7 @@ import type { AppSettings, PlanTier } from '@pb/shared';
 import {
   currentViewsPeriod,
   mergeSettings,
+  toAppSettings,
   viewLimitForPlan,
 } from '@pb/shared';
 import { resolveStoreTokens } from '../storage/oauth-cache.js';
@@ -26,6 +27,7 @@ export interface StoredSettingsDoc {
   currentViewsCount: number;
   viewsPeriod: string;
   cartUpsellEnabled: boolean;
+  currency?: string;
 }
 
 function defaultDoc(storeId: string): StoredSettingsDoc {
@@ -43,26 +45,12 @@ function defaultDoc(storeId: string): StoredSettingsDoc {
     currentViewsCount: 0,
     viewsPeriod: currentViewsPeriod(),
     cartUpsellEnabled: false,
+    currency: defaults.currency,
   };
 }
 
 function mapSettings(storeId: string, row: StoredSettingsDoc): AppSettings {
-  return {
-    id: storeId,
-    storeId,
-    title: row.title,
-    widgetTitle: row.widgetTitle,
-    buttonLabel: row.buttonLabel,
-    showSavingsBadge: row.showSavingsBadge,
-    themeSyncEnabled: row.themeSyncEnabled,
-    stockShieldEnabled: row.stockShieldEnabled,
-    stockThreshold: row.stockThreshold,
-    planTier: row.planTier,
-    monthlyViewsLimit: row.monthlyViewsLimit,
-    currentViewsCount: row.currentViewsCount,
-    viewsPeriod: row.viewsPeriod,
-    cartUpsellEnabled: row.cartUpsellEnabled,
-  };
+  return toAppSettings(row as unknown as Record<string, unknown>, storeId);
 }
 
 async function loadDoc(storeId: string, sessionAccessToken?: string): Promise<StoredSettingsDoc> {
@@ -115,8 +103,30 @@ export async function saveAppSettings(
     doc.monthlyViewsLimit = viewLimitForPlan(partial.planTier);
   }
   if (partial.monthlyViewsLimit != null) doc.monthlyViewsLimit = partial.monthlyViewsLimit;
+  if (partial.currency != null) doc.currency = partial.currency;
   await saveDoc(storeId, doc, sessionAccessToken);
   return mapSettings(storeId, doc);
+}
+
+/**
+ * Persist the store currency without rewriting public config. Used after a
+ * successful `/profile` read so cold serverless instances can format money
+ * without another Ecwid round-trip (or when only a public token is available).
+ */
+export async function persistStoreCurrency(
+  storeId: string,
+  currency: string,
+  sessionAccessToken?: string,
+): Promise<void> {
+  const trimmed = currency.trim();
+  if (!trimmed) return;
+
+  const doc = await loadDoc(storeId, sessionAccessToken);
+  if (doc.currency === trimmed) return;
+
+  doc.currency = trimmed;
+  const tokens = await resolveStoreTokens(storeId, sessionAccessToken);
+  await writeStorageJson(tokens, storageKeys().settings, doc);
 }
 
 export async function incrementMonthlyViews(

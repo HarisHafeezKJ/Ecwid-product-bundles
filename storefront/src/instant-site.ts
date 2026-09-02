@@ -1,3 +1,5 @@
+import { decodeEcwidNestedJson, parseInstantSiteContextRaw } from '@pb/shared';
+
 /** Helpers for Ecwid Instant Site (company.site) product pages. */
 
 export function isInstantSiteHost(): boolean {
@@ -64,34 +66,7 @@ export function getInstantSite(): InstantSiteApi | undefined {
   return win.instantsite;
 }
 
-/** Decode Ecwid Instant Site `appsPublicConfigs` values (often nested JSON strings). */
-export function decodeEcwidNestedJson(raw: unknown): unknown {
-  let current = raw;
-  for (let depth = 0; depth < 6; depth++) {
-    if (typeof current === 'string') {
-      const trimmed = current.trim();
-      if (!trimmed) return null;
-      try {
-        current = JSON.parse(trimmed);
-        continue;
-      } catch {
-        break;
-      }
-    }
-    if (current && typeof current === 'object' && !Array.isArray(current)) {
-      const obj = current as Record<string, unknown>;
-      if (obj.value != null) {
-        const keys = Object.keys(obj);
-        if (keys.length === 1 || (keys.length === 2 && keys.includes('key'))) {
-          current = obj.value;
-          continue;
-        }
-      }
-    }
-    break;
-  }
-  return current;
-}
+export { decodeEcwidNestedJson };
 
 /** Ecwid Instant Site embeds app tokens in `window.initialState` before app JS runs. */
 export function parseInstantSiteInitialState(): {
@@ -102,18 +77,7 @@ export function parseInstantSiteInitialState(): {
   const win = window as Window & { initialState?: string };
   const raw = win.initialState;
   if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as {
-      context?: {
-        appJsUrls?: string[];
-        appsPublicTokens?: Record<string, string>;
-        appsPublicConfigs?: Record<string, string>;
-      };
-    };
-    return parsed.context ?? null;
-  } catch {
-    return null;
-  }
+  return parseInstantSiteContextRaw(raw);
 }
 
 export function publicTokenFromInitialState(clientId: string): string | undefined {

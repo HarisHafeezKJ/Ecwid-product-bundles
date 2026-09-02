@@ -1,6 +1,10 @@
 import type { BundleRule } from './types.js';
 
-export function inferApplyToAllProducts(rule: Pick<BundleRule, 'applyToAllProducts' | 'displayOn' | 'primaryProductId'>): boolean {
+export function inferApplyToAllProducts(rule: {
+  applyToAllProducts?: boolean | null;
+  displayOn?: BundleRule['displayOn'];
+  primaryProductId?: string;
+}): boolean {
   if (rule.applyToAllProducts != null) return rule.applyToAllProducts;
   if (rule.displayOn === 'PRIMARY' && rule.primaryProductId) return false;
   return true;

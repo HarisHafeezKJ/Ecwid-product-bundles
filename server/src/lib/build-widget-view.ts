@@ -102,13 +102,9 @@ function mergeProductsWithRuleItems(
   return merged;
 }
 
-export async function buildWidgetViewForRule(
-  tokens: EcwidStoreTokens,
-  rule: BundleRule,
-  productId: string,
-  overViewLimit = false,
-): Promise<StorefrontWidgetView | null> {
-  if (!ruleShowsOnProductPage(rule, productId)) return null;
+/** Catalog IDs a rule needs to render on this product page. Empty = skip. */
+export function catalogIdsForRule(rule: BundleRule, productId: string): string[] {
+  if (!ruleShowsOnProductPage(rule, productId)) return [];
 
   const items = rule.items?.components ?? [];
   let productIds: string[] = [];
@@ -128,13 +124,28 @@ export async function buildWidgetViewForRule(
       productIds = mixPoolProductIds(rule);
       break;
     default:
-      return null;
+      return [];
   }
 
-  productIds = [...new Set(productIds.filter(Boolean))];
+  return [...new Set(productIds.filter(Boolean))];
+}
+
+export async function buildWidgetViewForRule(
+  tokens: EcwidStoreTokens,
+  rule: BundleRule,
+  productId: string,
+  overViewLimit = false,
+  catalog?: CatalogProduct[],
+): Promise<StorefrontWidgetView | null> {
+  const productIds = catalogIdsForRule(rule, productId);
   if (productIds.length === 0) return null;
 
-  const loaded = (await getProducts(tokens, productIds)).filter(productInStock);
+  const items = rule.items?.components ?? [];
+  const loaded = (
+    catalog
+      ? catalog.filter((product) => productIds.includes(product.id))
+      : await getProducts(tokens, productIds)
+  ).filter(productInStock);
   const products = mergeProductsWithRuleItems(loaded, items, productIds).filter(productInStock);
   if (products.length === 0) return null;
 
@@ -170,10 +181,11 @@ export async function buildStorefrontWidgetViews(
   productId: string,
   overViewLimit = false,
 ): Promise<StorefrontWidgetView[]> {
-  const views: StorefrontWidgetView[] = [];
-  for (const rule of rules) {
-    const view = await buildWidgetViewForRule(tokens, rule, productId, overViewLimit);
-    if (view) views.push(view);
-  }
-  return views;
+  const neededIds = [...new Set(rules.flatMap((rule) => catalogIdsForRule(rule, productId)))];
+  const catalog = neededIds.length > 0 ? await getProducts(tokens, neededIds) : [];
+
+  const built = await Promise.all(
+    rules.map((rule) => buildWidgetViewForRule(tokens, rule, productId, overViewLimit, catalog)),
+  );
+  return built.filter((view): view is StorefrontWidgetView => view != null);
 }

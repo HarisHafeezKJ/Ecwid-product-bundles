@@ -31,33 +31,7 @@ export interface StoredRulesDoc {
 }
 
 export function mapStoredRule(row: StoredRuleRow): BundleRule {
-  return toBundleRule(
-    {
-      id: row.id,
-      title: row.title,
-      ruleType: row.ruleType,
-      discountType: row.discountType,
-      discountValue: row.discountValue,
-      status: row.status,
-      primaryProductId: row.primaryProductId,
-      displayOn: row.displayOn,
-      applyToAllProducts: row.applyToAllProducts,
-      targetProductId: row.targetProductId,
-      layout: row.layout,
-      widgetStyle: row.widgetStyle,
-      items: row.items,
-      sourceCollectionId: row.sourceCollectionId,
-      requiredCount: row.requiredCount,
-      volumeTiers: row.volumeTiers,
-      triggerProductIds: row.triggerProductIds,
-      suggestedProductIds: row.suggestedProductIds,
-      allowVariantChoice: row.allowVariantChoice,
-      storeId: row.storeId,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    },
-    row.storeId,
-  );
+  return toBundleRule(row as unknown as Record<string, unknown>, row.storeId);
 }
 
 export function ruleInputFromBody(body: Record<string, unknown>, storeId: string): Partial<BundleRule> {

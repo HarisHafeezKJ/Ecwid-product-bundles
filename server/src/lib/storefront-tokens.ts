@@ -1,6 +1,12 @@
-import type { EcwidStoreTokens } from './ecwid.js';
+import {
+  isPrivateStoreTokens,
+  publicStoreTokens,
+  type EcwidStoreTokens,
+} from './ecwid.js';
 import { getStoreTokens } from './auth.js';
 import { getOAuthTokens } from './storage/oauth-cache.js';
+
+export { isPrivateStoreTokens };
 
 /** OAuth / public token resolution for storefront APIs (offer, add-discounted, etc.). */
 export async function resolveStorefrontTokens(
@@ -9,15 +15,19 @@ export async function resolveStorefrontTokens(
 ): Promise<EcwidStoreTokens | null> {
   const cachedPrivate = await getOAuthTokens(storeId);
 
-  let tokens = cachedPrivate;
-  if (tokens && publicToken && !tokens.publicToken) {
-    tokens = { ...tokens, publicToken };
+  if (cachedPrivate && isPrivateStoreTokens(cachedPrivate)) {
+    if (publicToken && !cachedPrivate.publicToken) {
+      return { ...cachedPrivate, publicToken };
+    }
+    return cachedPrivate;
   }
-  if (!tokens && publicToken) {
-    tokens = { storeId, accessToken: publicToken, publicToken };
+
+  if (publicToken) {
+    return publicStoreTokens(storeId, publicToken);
   }
-  if (!tokens) {
-    tokens = await getStoreTokens(storeId);
-  }
-  return tokens;
+
+  const fromSession = await getStoreTokens(storeId);
+  if (fromSession) return fromSession;
+
+  return null;
 }

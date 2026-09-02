@@ -9,6 +9,7 @@ import {
   defaultWidgetStyle,
   validateRuleForm,
 } from '@pb/shared';
+import { normalizeRulesStorageDoc } from '@pb/shared';
 import { ClientError } from '../api-response.js';
 import { resolveStoreTokens } from '../storage/oauth-cache.js';
 import {
@@ -24,16 +25,7 @@ import { serializeRulesForPublicConfig } from './public-rules.js';
 const EMPTY_IDS: string[] = [];
 
 function normalizeRulesDoc(raw: unknown): StoredRulesDoc {
-  if (!raw) return { rules: [] };
-  // Legacy / corrupted storage may be a bare array of rules instead of { rules: [] }.
-  if (Array.isArray(raw)) return { rules: raw as StoredRuleRow[] };
-  if (typeof raw === 'object') {
-    const doc = raw as StoredRulesDoc;
-    if (Array.isArray(doc.rules)) return doc;
-    const wrapped = (raw as { value?: unknown }).value;
-    if (wrapped != null) return normalizeRulesDoc(wrapped);
-  }
-  return { rules: [] };
+  return normalizeRulesStorageDoc(raw) as StoredRulesDoc;
 }
 
 async function loadRulesDoc(storeId: string, sessionAccessToken?: string): Promise<StoredRulesDoc> {

@@ -11,7 +11,7 @@ import {
   bestVolumeTier,
 } from '@pb/shared';
 import type { EcwidStoreTokens } from './ecwid.js';
-import { priceLinesForRule } from './price-lines-for-rule.js';
+import { primeProductCache, priceLinesForRule, type ProductCache } from './price-lines-for-rule.js';
 
 export interface LinePlan {
   lineIndex: number;
@@ -56,6 +56,12 @@ export async function syncVolumeCart(
 ): Promise<{ updated: LinePlan[] }> {
   const parsed = parseCartCatalogLines(lines);
   const plans: LinePlan[] = [];
+
+  // Every line goes through `priceLinesForRule` individually; without a shared
+  // cache each one made its own catalog round-trip. Prefetch the whole cart's
+  // products in a single batch and reuse the cache for every rule pricing call.
+  const cache: ProductCache = new Map();
+  await primeProductCache(tokens, parsed.map((line) => line.productId), cache);
 
   for (let i = 0; i < parsed.length; i++) {
     const line = parsed[i]!;
@@ -122,13 +128,18 @@ export async function syncVolumeCart(
         continue;
       }
 
-      const priced = await priceLinesForRule(tokens, rule, [
-        {
-          productId: line.productId,
-          variantId: line.variantId,
-          quantity: line.quantity,
-        },
-      ]);
+      const priced = await priceLinesForRule(
+        tokens,
+        rule,
+        [
+          {
+            productId: line.productId,
+            variantId: line.variantId,
+            quantity: line.quantity,
+          },
+        ],
+        cache,
+      );
       const p = priced[0]!;
       plans.push({
         lineIndex: i,
@@ -161,13 +172,18 @@ export async function syncVolumeCart(
         continue;
       }
 
-      const priced = await priceLinesForRule(tokens, rule, [
-        {
-          productId: line.productId,
-          variantId: line.variantId,
-          quantity: line.quantity,
-        },
-      ]);
+      const priced = await priceLinesForRule(
+        tokens,
+        rule,
+        [
+          {
+            productId: line.productId,
+            variantId: line.variantId,
+            quantity: line.quantity,
+          },
+        ],
+        cache,
+      );
       const p = priced[0]!;
       plans.push({
         lineIndex: i,

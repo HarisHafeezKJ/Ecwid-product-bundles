@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { EcwidStoreTokens } from '../ecwid.js';
+import { isPrivateStoreTokens, privateStoreTokens, type EcwidStoreTokens } from '../ecwid.js';
 import { getManifest } from '../config.js';
 import { readStorageJson, writeStorageJson } from './ecwid-storage.js';
 
@@ -38,10 +38,10 @@ export async function resolveStoreTokens(
   sessionAccessToken?: string,
 ): Promise<EcwidStoreTokens> {
   const cached = await getOAuthTokens(storeId);
-  if (cached?.accessToken) return cached;
+  if (cached?.accessToken && isPrivateStoreTokens(cached)) return cached;
   if (sessionAccessToken) {
     hydrateOAuthCache(storeId, sessionAccessToken);
-    return { storeId, accessToken: sessionAccessToken };
+    return privateStoreTokens(storeId, sessionAccessToken);
   }
   throw new Error('Store not authenticated');
 }
@@ -52,7 +52,7 @@ export function hydrateOAuthCache(
   accessToken: string,
   publicToken?: string,
 ): void {
-  const tokens: EcwidStoreTokens = { storeId, accessToken, publicToken };
+  const tokens = privateStoreTokens(storeId, accessToken, publicToken);
   memory.set(storeId, tokens);
 
   const file = readFileCache();
@@ -70,7 +70,7 @@ export async function persistOAuthTokens(
   accessToken: string,
   publicToken?: string,
 ): Promise<void> {
-  const tokens: EcwidStoreTokens = { storeId, accessToken, publicToken };
+  const tokens = privateStoreTokens(storeId, accessToken, publicToken);
   memory.set(storeId, tokens);
 
   const doc: OAuthDoc = {
@@ -94,11 +94,7 @@ export async function getOAuthTokens(storeId: string): Promise<EcwidStoreTokens 
   const file = readFileCache();
   const doc = file[storeId];
   if (doc?.accessToken) {
-    const tokens: EcwidStoreTokens = {
-      storeId,
-      accessToken: doc.accessToken,
-      publicToken: doc.publicToken,
-    };
+    const tokens = privateStoreTokens(storeId, doc.accessToken, doc.publicToken);
     memory.set(storeId, tokens);
     return tokens;
   }
@@ -114,11 +110,7 @@ export async function refreshOAuthFromStorage(storeId: string): Promise<EcwidSto
   const doc = await readStorageJson<OAuthDoc>(bootstrap, getManifest().storage.oauth);
   if (!doc?.accessToken) return bootstrap;
 
-  const tokens: EcwidStoreTokens = {
-    storeId,
-    accessToken: doc.accessToken,
-    publicToken: doc.publicToken,
-  };
+  const tokens = privateStoreTokens(storeId, doc.accessToken, doc.publicToken);
   memory.set(storeId, tokens);
 
   const file = readFileCache();

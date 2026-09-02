@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { validateRuleForm, type BundleRule } from '@pb/shared';
 import * as api from '../api/client';
+import ConfirmModal from '../components/ConfirmModal';
+import Toast from '../components/Toast';
 import EditorSetup from '../components/editor/EditorSetup';
 import EditorStyle from '../components/editor/EditorStyle';
 import PreviewFrame from '../components/editor/PreviewFrame';
 import StorefrontPreview from '../components/editor/StorefrontPreview';
 import { draftFromRule, draftToRuleInput } from '../components/editor/editor-draft';
 import type { OfferDraft } from '../components/editor/editor-draft';
+import { useDraftAutosave } from '../hooks/useDraftAutosave';
 
 interface OfferEditorProps {
   /** Fully resolved by the route — the editor never fetches the rule itself. */
@@ -24,6 +27,16 @@ export default function OfferEditor({ initialDraft, onClose, onDirtyChange }: Of
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [discardOpen, setDiscardOpen] = useState(false);
+
+  const { restoreOffer, dismissRestore, clearAutosave } = useDraftAutosave(
+    draft,
+    baselineRef.current,
+  );
+
+  const dirty = JSON.stringify(draft) !== baselineRef.current;
+  const liveValidation = useMemo(() => validateRuleForm(draft), [draft]);
+  const setupHasErrors = dirty && !liveValidation.valid;
 
   const patchDraft = useCallback((patch: Partial<OfferDraft>) => {
     setDraft((prev) => ({ ...prev, ...patch }));
@@ -38,21 +51,22 @@ export default function OfferEditor({ initialDraft, onClose, onDirtyChange }: Of
   }, []);
 
   useEffect(() => {
-    const dirty = JSON.stringify(draft) !== baselineRef.current;
     onDirtyChange?.(dirty);
-  }, [draft, onDirtyChange]);
+  }, [dirty, onDirtyChange]);
 
   const requestClose = useCallback(() => {
-    if (JSON.stringify(draft) !== baselineRef.current) {
-      if (!window.confirm('Discard unsaved changes?')) return;
+    if (dirty) {
+      setDiscardOpen(true);
+      return;
     }
     onClose(false);
-  }, [draft, onClose]);
+  }, [dirty, onClose]);
 
   const handleSave = async () => {
     const validation = validateRuleForm(draft);
     if (!validation.valid) {
       setValidationErrors(validation.errors);
+      setTab('setup');
       return;
     }
     setSaving(true);
@@ -61,6 +75,7 @@ export default function OfferEditor({ initialDraft, onClose, onDirtyChange }: Of
     try {
       const rule = await api.saveRule(draftToRuleInput(draft));
       baselineRef.current = JSON.stringify(draftFromRule(rule));
+      clearAutosave();
       setToast('Saved successfully.');
       setTimeout(() => onClose(true, rule), 600);
     } catch (err) {
@@ -72,6 +87,27 @@ export default function OfferEditor({ initialDraft, onClose, onDirtyChange }: Of
 
   return (
     <div>
+      {restoreOffer && (
+        <div className="info-banner" style={{ marginBottom: 16 }}>
+          <span>You have an unsaved draft for this offer.</span>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => {
+                setDraft(restoreOffer);
+                dismissRestore();
+              }}
+            >
+              Restore draft
+            </button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={dismissRestore}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-body" style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
           <div className="field" style={{ flex: 1, minWidth: 220 }}>
@@ -130,6 +166,16 @@ export default function OfferEditor({ initialDraft, onClose, onDirtyChange }: Of
           </ul>
         </div>
       )}
+      {setupHasErrors && validationErrors.length === 0 && (
+        <div className="error-banner" style={{ marginBottom: 16 }}>
+          <strong>Setup needs attention:</strong>
+          <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
+            {liveValidation.errors.map((message) => (
+              <li key={message}>{message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="editor-layout">
         <div className="editor-panel">
@@ -140,6 +186,11 @@ export default function OfferEditor({ initialDraft, onClose, onDirtyChange }: Of
               onClick={() => setTab('setup')}
             >
               1. Setup &amp; Offer Rules
+              {setupHasErrors && (
+                <span className="tab-error-badge" aria-label="Validation errors">
+                  {liveValidation.errors.length}
+                </span>
+              )}
             </button>
             <button
               type="button"
@@ -162,7 +213,22 @@ export default function OfferEditor({ initialDraft, onClose, onDirtyChange }: Of
         </PreviewFrame>
       </div>
 
-      {toast && <div className="toast">{toast}</div>}
+      {discardOpen && (
+        <ConfirmModal
+          title="Discard changes"
+          message="Discard unsaved changes?"
+          confirmLabel="Discard"
+          danger
+          onCancel={() => setDiscardOpen(false)}
+          onConfirm={() => {
+            setDiscardOpen(false);
+            clearAutosave();
+            onClose(false);
+          }}
+        />
+      )}
+
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </div>
   );
 }

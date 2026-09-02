@@ -1,3 +1,4 @@
+import { decodeEcwidNestedJson, unwrapStorageDoc, wrapStorageDoc } from '@pb/shared';
 import { getManifest } from '../config.js';
 import type { EcwidStoreTokens } from '../ecwid.js';
 
@@ -24,48 +25,7 @@ async function storageRequest(
   });
 }
 
-/** Decode Ecwid storage payloads (string JSON, nested strings, or { value } envelopes). */
-function decodeStorageJson<T>(raw: unknown): T | null {
-  if (raw == null) return null;
-
-  let current: unknown = raw;
-  for (let depth = 0; depth < 4; depth++) {
-    if (typeof current === 'string') {
-      const trimmed = current.trim();
-      if (!trimmed) return null;
-      try {
-        current = JSON.parse(trimmed);
-        continue;
-      } catch {
-        return null;
-      }
-    }
-
-    if (current && typeof current === 'object' && !Array.isArray(current)) {
-      const envelope = current as Record<string, unknown>;
-      if (envelope.value != null) {
-        const keys = Object.keys(envelope);
-        const isApiEnvelope =
-          keys.length === 1 ||
-          (keys.length === 2 && keys.includes('key') && keys.includes('value'));
-        if (isApiEnvelope) {
-          current = envelope.value;
-          continue;
-        }
-      }
-    }
-
-    break;
-  }
-
-  if (current && typeof current === 'object') return current as T;
-  return null;
-}
-
-function extractStorageValue(
-  data: unknown,
-  key: string,
-): unknown {
+function extractStorageValue(data: unknown, key: string): unknown {
   if (Array.isArray(data)) {
     const row =
       data.find(
@@ -103,7 +63,7 @@ export async function readStorageJson<T>(
 
   const data = (await res.json()) as unknown;
   const raw = extractStorageValue(data, key);
-  return decodeStorageJson<T>(raw);
+  return unwrapStorageDoc<T>(raw);
 }
 
 /** Write a private storage key (PUT replaces value). */
@@ -112,9 +72,10 @@ export async function writeStorageJson(
   key: string,
   value: unknown,
 ): Promise<void> {
+  const payload = wrapStorageDoc(value);
   const res = await storageRequest(tokens, key, {
     method: 'PUT',
-    body: JSON.stringify({ value: JSON.stringify(value) }),
+    body: JSON.stringify({ value: JSON.stringify(payload) }),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -141,3 +102,6 @@ export async function readPublicConfig(
 export function storageKeys() {
   return getManifest().storage;
 }
+
+/** @deprecated Import from `@pb/shared` — kept for transitional server imports. */
+export { decodeEcwidNestedJson };

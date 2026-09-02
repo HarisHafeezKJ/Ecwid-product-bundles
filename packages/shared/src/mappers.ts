@@ -1,6 +1,7 @@
 import { asBoolean, asNumber, asString, asStringArray, isDiscountType, isRuleType } from './guards.js';
 import { parseBundleItems } from './bundle-items.js';
 import { clampDiscountValue } from './pricing.js';
+import { inferApplyToAllProducts } from './rule-placement.js';
 import { DEFAULT_SETTINGS } from './settings.js';
 import { defaultVolumeTiersForRuleType, parseVolumeTiers } from './volume-tiers.js';
 import { defaultWidgetStyle, parseWidgetStyle } from './widget-style.js';
@@ -42,12 +43,13 @@ function parsePlanTier(value: unknown): PlanTier {
   return 'FREE';
 }
 
-function inferApplyToAllProducts(row: Record<string, unknown>): boolean {
-  if (row.applyToAllProducts != null) return asBoolean(row.applyToAllProducts, true);
-  const displayOn = parseDisplayOn(row.displayOn);
-  const primaryProductId = asString(row.primaryProductId);
-  if (displayOn === 'PRIMARY' && primaryProductId) return false;
-  return true;
+function inferApplyToAllFromRow(row: Record<string, unknown>): boolean {
+  return inferApplyToAllProducts({
+    applyToAllProducts:
+      row.applyToAllProducts != null ? asBoolean(row.applyToAllProducts, true) : undefined,
+    displayOn: parseDisplayOn(row.displayOn),
+    primaryProductId: asString(row.primaryProductId) || undefined,
+  });
 }
 
 export function emptyRuleInput(ruleType: RuleType, storeId: string): Partial<BundleRule> {
@@ -87,7 +89,7 @@ export function toBundleRule(raw: Record<string, unknown>, storeId: string): Bun
   const items = parseBundleItems(raw.items);
   const volumeTiers = parseVolumeTiersWrap(raw.volumeTiers);
   const widgetStyle = parseWidgetStyle(raw.widgetStyle, ruleType);
-  const applyToAllProducts = inferApplyToAllProducts(raw);
+  const applyToAllProducts = inferApplyToAllFromRow(raw);
 
   return {
     id: asString(raw.id ?? raw._id),
@@ -131,6 +133,7 @@ export function toAppSettings(raw: Record<string, unknown>, storeId: string): Ap
     currentViewsCount: asNumber(raw.currentViewsCount, 0),
     viewsPeriod: asString(raw.viewsPeriod, ''),
     cartUpsellEnabled: asBoolean(raw.cartUpsellEnabled, false),
+    currency: asString(raw.currency) || undefined,
   };
 }
 

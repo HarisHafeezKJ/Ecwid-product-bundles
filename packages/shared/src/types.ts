@@ -165,6 +165,8 @@ export interface AppSettings {
   currentViewsCount: number;
   viewsPeriod: string;
   cartUpsellEnabled?: boolean;
+  /** ISO 4217 code cached from the store profile (e.g. USD). */
+  currency?: string;
 }
 
 export interface RuleImpression {

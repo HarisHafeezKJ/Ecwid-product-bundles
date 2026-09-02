@@ -58,6 +58,22 @@ const COLOR_KEYS = new Set([
   'checkoutCtaColor',
 ]);
 
+/** Reject values that could break out of a `style=""` attribute or inject CSS. */
+const UNSAFE_CSS_VALUE = /[<>"'`\\]|(?:url|expression|javascript)\s*\(/i;
+
+function isColorKey(key: string): boolean {
+  return COLOR_KEYS.has(key) || key.endsWith('Color') || key.endsWith('Bg') || key.endsWith('Border');
+}
+
+function sanitizeCssColor(raw: string): string | undefined {
+  const value = raw.trim();
+  if (!value || UNSAFE_CSS_VALUE.test(value)) return undefined;
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value)) return value;
+  if (/^(rgb|rgba|hsl|hsla)\(\s*[\d.%\s,/]+\)$/i.test(value)) return value;
+  if (/^[a-z][a-z0-9-]*$/i.test(value)) return value;
+  return undefined;
+}
+
 export function widgetStyleCssVars(style: WidgetStyle, prefix = 'pb'): Record<string, string> {
   const vars: Record<string, string> = {};
   for (const [key, raw] of Object.entries(style)) {
@@ -66,16 +82,17 @@ export function widgetStyleCssVars(style: WidgetStyle, prefix = 'pb'): Record<st
     const name = `--${prefix}-${kebab}`;
     if (SIZE_KEYS.has(key)) {
       const n = Number(raw);
-      if (!Number.isNaN(n)) vars[name] = `${n}px`;
+      if (!Number.isNaN(n) && Number.isFinite(n)) vars[name] = `${n}px`;
       continue;
     }
     if (WIDTH_PERCENT_KEYS.has(key)) {
       const n = Number(raw);
-      if (!Number.isNaN(n)) vars[name] = String(n);
+      if (!Number.isNaN(n) && Number.isFinite(n)) vars[name] = String(Math.min(100, Math.max(0, n)));
       continue;
     }
-    if (COLOR_KEYS.has(key) || key.endsWith('Color') || key.endsWith('Bg') || key.endsWith('Border')) {
-      vars[name] = String(raw);
+    if (isColorKey(key)) {
+      const color = sanitizeCssColor(String(raw));
+      if (color) vars[name] = color;
     }
   }
   return vars;
@@ -101,18 +118,20 @@ export function mirrorNativeAtcTheme(root: HTMLElement): void {
   if (!native) return;
 
   const cs = getComputedStyle(native);
-  const set = (name: string, value: string) => {
-    if (value) root.style.setProperty(name, value);
+  const setColor = (name: string, value: string) => {
+    const color = sanitizeCssColor(value);
+    if (color) root.style.setProperty(name, color);
   };
 
-  set('--pb-cta-bg', cs.backgroundColor);
-  set('--pb-cta-color', cs.color);
-  set('--pb-cta-radius', cs.borderRadius);
-  set('--pb-cta-size', cs.fontSize);
-  set('--pb-cta-font-weight', cs.fontWeight);
-  set('--pb-cta-border', cs.border);
-  set('--pb-cta-padding', cs.padding);
-  set('--pb-cta-min-height', cs.minHeight !== '0px' ? cs.minHeight : cs.height);
+  setColor('--pb-cta-bg', cs.backgroundColor);
+  setColor('--pb-cta-color', cs.color);
+  if (cs.borderRadius) root.style.setProperty('--pb-cta-radius', cs.borderRadius);
+  if (cs.fontSize) root.style.setProperty('--pb-cta-size', cs.fontSize);
+  if (cs.fontWeight) root.style.setProperty('--pb-cta-font-weight', cs.fontWeight);
+  if (cs.border) root.style.setProperty('--pb-cta-border', cs.border);
+  if (cs.padding) root.style.setProperty('--pb-cta-padding', cs.padding);
+  const minH = cs.minHeight !== '0px' ? cs.minHeight : cs.height;
+  if (minH && minH !== '0px') root.style.setProperty('--pb-cta-min-height', minH);
   root.classList.add('pb-widget--native-atc');
 }
 

@@ -4,6 +4,7 @@ import type { BundleRule, RuleType } from '@pb/shared';
 import { isRuleType } from '@pb/shared';
 import * as api from './api/client';
 import { checkDashboardSession, consumeServerAuthError } from './api/session';
+import ConfirmModal from './components/ConfirmModal';
 import DashboardHome from './pages/DashboardHome';
 import OfferEditor from './pages/OfferEditor';
 import { blankDraft, draftFromRule } from './components/editor/editor-draft';
@@ -52,7 +53,17 @@ export default function App() {
     return (
       <div className="app-shell">
         <main className="app-main">
-          <p>{authError}</p>
+          <div className="error-banner">
+            <p>{authError}</p>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ marginTop: 12 }}
+              onClick={() => window.location.reload()}
+            >
+              Retry
+            </button>
+          </div>
         </main>
       </div>
     );
@@ -161,21 +172,36 @@ export function CreateOfferRoute() {
   const { ruleType } = useParams();
   const [editorDirty, setEditorDirty] = useState(false);
   const { handleClose, handleBack } = useCloseHandlers(setEditorDirty);
-  useUnsavedChangesGuard(editorDirty);
+  const guard = useUnsavedChangesGuard(editorDirty);
 
   if (!ruleType || !isRuleType(ruleType)) {
     return <Navigate to="/" replace />;
   }
 
   return (
-    <EditorShell onBack={handleBack}>
-      <OfferEditor
-        key={`create-${ruleType}`}
-        initialDraft={blankDraft(ruleType)}
-        onClose={handleClose}
-        onDirtyChange={setEditorDirty}
-      />
-    </EditorShell>
+    <>
+      <EditorShell onBack={handleBack}>
+        <OfferEditor
+          key={`create-${ruleType}`}
+          initialDraft={blankDraft(ruleType)}
+          onClose={handleClose}
+          onDirtyChange={setEditorDirty}
+        />
+      </EditorShell>
+      {guard.navigationBlocked && (
+        <ConfirmModal
+          title="Discard changes"
+          message="Discard unsaved changes?"
+          confirmLabel="Discard"
+          danger
+          onCancel={guard.cancelNavigation}
+          onConfirm={() => {
+            setEditorDirty(false);
+            guard.confirmNavigation();
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -191,7 +217,7 @@ export function EditOfferRoute() {
   const [load, setLoad] = useState<EditLoadState>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const { handleClose, handleBack } = useCloseHandlers(setEditorDirty);
-  useUnsavedChangesGuard(editorDirty);
+  const guard = useUnsavedChangesGuard(editorDirty);
 
   useEffect(() => {
     if (!id) return;
@@ -247,13 +273,28 @@ export function EditOfferRoute() {
   }
 
   return (
-    <EditorShell onBack={handleBack}>
-      <OfferEditor
-        key={id}
-        initialDraft={draftFromRule(load.rule)}
-        onClose={handleClose}
-        onDirtyChange={setEditorDirty}
-      />
-    </EditorShell>
+    <>
+      <EditorShell onBack={handleBack}>
+        <OfferEditor
+          key={id}
+          initialDraft={draftFromRule(load.rule)}
+          onClose={handleClose}
+          onDirtyChange={setEditorDirty}
+        />
+      </EditorShell>
+      {guard.navigationBlocked && (
+        <ConfirmModal
+          title="Discard changes"
+          message="Discard unsaved changes?"
+          confirmLabel="Discard"
+          danger
+          onCancel={guard.cancelNavigation}
+          onConfirm={() => {
+            setEditorDirty(false);
+            guard.confirmNavigation();
+          }}
+        />
+      )}
+    </>
   );
 }

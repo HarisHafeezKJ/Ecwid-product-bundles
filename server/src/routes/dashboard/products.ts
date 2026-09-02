@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getProducts, searchProducts } from '../../lib/ecwid.js';
+import { getProducts, searchProducts, privateStoreTokens } from '../../lib/ecwid.js';
 import { failResponse, jsonResponse } from '../../lib/api-response.js';
 import { requireDashboardAuth } from '../../lib/auth.js';
 
@@ -21,7 +21,7 @@ productsRouter.get('/', async (req, res) => {
   try {
     const storeId = req.session!.storeId!;
     const accessToken = req.session!.accessToken!;
-    const tokens = { storeId, accessToken };
+    const tokens = privateStoreTokens(storeId, accessToken);
     const ids = parseIdList(req.query.ids ?? req.query.productIds);
     if (ids.length > 0) {
       const products = await getProducts(tokens, ids);
@@ -44,7 +44,7 @@ productsRouter.get('/search', async (req, res) => {
   try {
     const storeId = req.session!.storeId!;
     const accessToken = req.session!.accessToken!;
-    const tokens = { storeId, accessToken };
+    const tokens = privateStoreTokens(storeId, accessToken);
     const ids = parseIdList(req.query.ids ?? req.query.productIds);
     if (ids.length > 0) {
       const products = await getProducts(tokens, ids);
@@ -68,7 +68,7 @@ productsRouter.get('/:productId', async (req, res) => {
     const storeId = req.session!.storeId!;
     const accessToken = req.session!.accessToken!;
     const { getProduct } = await import('../../lib/ecwid.js');
-    const product = await getProduct({ storeId, accessToken }, req.params.productId!);
+    const product = await getProduct(privateStoreTokens(storeId, accessToken), req.params.productId!);
     if (!product) return failResponse(res, req, 'Product not found', 404);
     jsonResponse(res, req, { product });
   } catch (err) {

@@ -1,18 +1,18 @@
 import { useEffect } from 'react';
 import { useBlocker } from 'react-router-dom';
 
+export interface UnsavedChangesGuard {
+  navigationBlocked: boolean;
+  confirmNavigation: () => void;
+  cancelNavigation: () => void;
+}
+
 /** Guards both in-app navigation (router blocker) and tab close/reload (beforeunload). */
-export function useUnsavedChangesGuard(dirty: boolean): void {
+export function useUnsavedChangesGuard(dirty: boolean): UnsavedChangesGuard {
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       dirty && currentLocation.pathname !== nextLocation.pathname,
   );
-
-  useEffect(() => {
-    if (blocker.state !== 'blocked') return;
-    if (window.confirm('Discard unsaved changes?')) blocker.proceed();
-    else blocker.reset();
-  }, [blocker]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -23,4 +23,10 @@ export function useUnsavedChangesGuard(dirty: boolean): void {
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [dirty]);
+
+  return {
+    navigationBlocked: blocker.state === 'blocked',
+    confirmNavigation: () => blocker.proceed?.(),
+    cancelNavigation: () => blocker.reset?.(),
+  };
 }

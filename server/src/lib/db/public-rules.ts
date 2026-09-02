@@ -1,40 +1,13 @@
-import { toBundleRule, type BundleRule } from '@pb/shared';
+import { decodeEcwidNestedJson, toBundleRule, type BundleRule } from '@pb/shared';
 import type { EcwidStoreTokens } from '../ecwid.js';
 import { readPublicConfig } from '../storage/ecwid-storage.js';
+
+export { decodeEcwidNestedJson };
 
 export interface PublicAppConfig {
   cartUpsellEnabled?: boolean;
   rules?: unknown[];
   rulesUpdatedAt?: string;
-}
-
-/** Decode Ecwid nested JSON envelopes (Instant Site `appsPublicConfigs`). */
-export function decodeEcwidNestedJson(raw: unknown): unknown {
-  let current = raw;
-  for (let depth = 0; depth < 6; depth++) {
-    if (typeof current === 'string') {
-      const trimmed = current.trim();
-      if (!trimmed) return null;
-      try {
-        current = JSON.parse(trimmed);
-        continue;
-      } catch {
-        break;
-      }
-    }
-    if (current && typeof current === 'object' && !Array.isArray(current)) {
-      const obj = current as Record<string, unknown>;
-      if (obj.value != null) {
-        const keys = Object.keys(obj);
-        if (keys.length === 1 || (keys.length === 2 && keys.includes('key'))) {
-          current = obj.value;
-          continue;
-        }
-      }
-    }
-    break;
-  }
-  return current;
 }
 
 /**

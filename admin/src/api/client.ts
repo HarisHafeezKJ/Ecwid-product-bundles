@@ -17,6 +17,13 @@ export class ApiError extends Error {
 
 async function parseJson<T>(res: Response): Promise<T> {
   if (res.status === 401) {
+    // Inside the Ecwid Control Panel iframe, redirecting to OAuth breaks the panel.
+    if (window.self !== window.top) {
+      throw new ApiError(
+        'Your session expired. Close and reopen the app from Ecwid Control Panel.',
+        401,
+      );
+    }
     window.location.href = '/api/auth/install';
     throw new ApiError('Redirecting to sign in…', 401);
   }

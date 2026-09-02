@@ -45,6 +45,10 @@ export function bindMixControls(
     dec.addEventListener('click', () => sync((state.mixQtys[productId] ?? 0) - 1));
     inc.addEventListener('click', () => sync((state.mixQtys[productId] ?? 0) + 1));
     input.addEventListener('change', () => sync(Number(input.value) || 0));
+    input.addEventListener('input', () => sync(Number(input.value) || 0));
+    input.addEventListener('paste', () => {
+      window.setTimeout(() => sync(Number(input.value) || 0), 0);
+    });
 
     input.value = String(state.mixQtys[productId] ?? 0);
   });

@@ -16,6 +16,7 @@ interface OffersTableProps {
   onEdit: (rule: BundleRule) => void;
   onToggleStatus: (rule: BundleRule) => void;
   onDelete: (rule: BundleRule) => void;
+  onCreateEmpty?: () => void;
 }
 
 const TYPE_OPTIONS: { value: TypeFilter; label: string }[] = [
@@ -38,6 +39,7 @@ export default function OffersTable({
   onEdit,
   onToggleStatus,
   onDelete,
+  onCreateEmpty,
 }: OffersTableProps) {
   return (
     <div>
@@ -67,24 +69,61 @@ export default function OffersTable({
           </div>
         </div>
         <div className="field">
-          <label htmlFor="status-filter">Status</label>
-          <select
-            id="status-filter"
-            value={statusFilter}
-            onChange={(e) => onStatusFilterChange(e.target.value as StatusFilter)}
-          >
-            <option value="ALL">All statuses</option>
-            <option value="ACTIVE">Active</option>
-            <option value="DISABLED">Paused</option>
-          </select>
+          <label>Status</label>
+          <div className="segmented" role="group" aria-label="Offer status filter">
+            {(
+              [
+                { value: 'ALL', label: 'All' },
+                { value: 'ACTIVE', label: 'Active' },
+                { value: 'DISABLED', label: 'Paused' },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                className={statusFilter === opt.value ? 'active' : ''}
+                onClick={() => onStatusFilterChange(opt.value)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {loading && rules.length === 0 ? (
-        <div className="empty-state">Loading offers…</div>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Offer</th>
+                <th>Type</th>
+                <th>Discount</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <tr key={i} className="skeleton-row">
+                  <td><div className="skeleton skeleton-text" /></td>
+                  <td><div className="skeleton skeleton-text skeleton-sm" /></td>
+                  <td><div className="skeleton skeleton-text skeleton-sm" /></td>
+                  <td><div className="skeleton skeleton-badge" /></td>
+                  <td><div className="skeleton skeleton-text" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : rules.length === 0 ? (
         <div className="empty-state">
           <p>No offers yet. Create your first bundle or upsell offer.</p>
+          {onCreateEmpty && (
+            <button type="button" className="btn btn-primary" style={{ marginTop: 16 }} onClick={onCreateEmpty}>
+              Create your first offer
+            </button>
+          )}
         </div>
       ) : (
         <div className="table-wrap">

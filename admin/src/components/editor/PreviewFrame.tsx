@@ -16,7 +16,7 @@ interface PreviewFrameProps {
 
 export default function PreviewFrame({ device, onDeviceChange, children }: PreviewFrameProps) {
   return (
-    <div className="card" style={{ position: 'sticky', top: 88 }}>
+    <div className="card" style={{ position: 'sticky', top: 'calc(var(--pb-header-h) + 16px)' }}>
       <div className="card-header">
         <strong>Live Store Preview</strong>
         <div className="segmented">

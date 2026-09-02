@@ -2,8 +2,8 @@
 
 import { resolveApiBaseUrl, setApiBaseUrl } from './api';
 import { runCartUpsell, teardownCartUpsell } from './cart-upsell/cart-upsell';
-import { startVolumeCartSync } from './cart-upsell/volume-cart-bind';
-import { startBundleCartSync } from './bundle-cart-bind';
+import { startVolumeCartSync, stopVolumeCartSync } from './cart-upsell/volume-cart-bind';
+import { startBundleCartSync, stopBundleCartSync } from './bundle-cart-bind';
 import {
   cartPageLooksLikely,
   getPageType,
@@ -23,6 +23,16 @@ import widgetCss from './styles/widget.css?inline';
 
 let initialized = false;
 
+function enableCartSync(): void {
+  startVolumeCartSync();
+  startBundleCartSync();
+}
+
+function disableCartSync(): void {
+  stopVolumeCartSync();
+  stopBundleCartSync();
+}
+
 function readScriptConfig(): void {
   const script = findOwnScript();
   if (!script) return;
@@ -31,21 +41,25 @@ function readScriptConfig(): void {
 
 function handlePage(page?: EcwidPage): void {
   const pageType = getPageType(page);
+  const isCart = cartPageLooksLikely(page) || pageType === 'CART';
 
   if (productPageLooksLikely(page)) {
     teardownCartUpsell();
+    disableCartSync();
     void initProductWidgets(page);
     return;
   }
 
   teardownProductWidgets();
 
-  if (cartPageLooksLikely(page) || pageType === 'CART') {
+  if (isCart) {
+    enableCartSync();
     void runCartUpsell(page);
     return;
   }
 
   teardownCartUpsell();
+  disableCartSync();
 }
 
 function bootstrap(): void {
@@ -67,8 +81,11 @@ function bootstrap(): void {
       page: getPageType(),
       productId: getProductId(),
     });
-    startVolumeCartSync();
-    startBundleCartSync();
+
+    // Cart sync used to start eagerly here, which meant the mutation observer
+    // and 10–12s interval ran on every page (product, category, home, …) even
+    // though it only has work to do on the cart page. It is now started from
+    // inside `handlePage` when the shopper actually lands on the cart.
 
     onPageLoaded((page) => handlePage(page));
 

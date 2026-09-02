@@ -17,3 +17,6 @@ export * from './settings.js';
 export * from './plan.js';
 export * from './offer-line-stamp.js';
 export * from './storefront-api.js';
+export * from './ecwid-json.js';
+export * from './storage-envelope.js';
+export * from './instant-site.js';

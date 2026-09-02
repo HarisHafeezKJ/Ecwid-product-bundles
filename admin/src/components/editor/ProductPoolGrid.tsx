@@ -85,7 +85,12 @@ function PoolGrid({
         </div>
       )}
       {error && <div className="error-banner" style={{ marginBottom: 12 }}>{error}</div>}
-      {loading && <p className="field-hint">Searching…</p>}
+      {loading && (
+        <div className="field-hint" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <span className="spinner" aria-hidden="true" />
+          Searching…
+        </div>
+      )}
       {!loading && displayProducts.length === 0 && !error && (
         <p className="field-hint">Type to search products in your catalog.</p>
       )}

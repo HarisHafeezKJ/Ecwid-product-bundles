@@ -29,7 +29,10 @@ export default function StorefrontPreview({ draft }: StorefrontPreviewProps) {
   const vars = cssVars(style);
   const bundleItemIds =
     draft.ruleType === 'FIXED_BUNDLE' ? draft.items.components.map((item) => item.productId) : [];
+  const mixItemIds =
+    draft.ruleType === 'MIX_AND_MATCH' ? draft.items.components.map((item) => item.productId) : [];
   const bundleProductMap = useProductMap(bundleItemIds);
+  const mixProductMap = useProductMap(mixItemIds);
 
   if (draft.ruleType === 'VOLUME_DISCOUNT') {
     const tiers = draft.volumeTiers.tiers;
@@ -101,7 +104,7 @@ export default function StorefrontPreview({ draft }: StorefrontPreviewProps) {
             {imageUrl ? (
               <img
                 src={imageUrl}
-                alt=""
+                alt={item.name ?? productMap[item.productId]?.name ?? `Product ${i + 1}`}
                 style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }}
               />
             ) : (
@@ -151,7 +154,11 @@ export default function StorefrontPreview({ draft }: StorefrontPreviewProps) {
           {style.blockTitle}
         </h3>
         <div className="product-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
-          {pool.slice(0, 4).map((item) => (
+          {pool.slice(0, 4).map((item) => {
+            const product = mixProductMap[item.productId];
+            const imageUrl = item.imageUrl ?? product?.imageUrl;
+            const name = item.name ?? product?.name ?? 'Product';
+            return (
             <div
               key={item.productId}
               style={{
@@ -161,10 +168,19 @@ export default function StorefrontPreview({ draft }: StorefrontPreviewProps) {
                 padding: 8,
               }}
             >
-              <div style={{ height: 60, background: '#f1f5f9', borderRadius: 6 }} />
-              <div style={{ fontSize: 12, fontWeight: 600, marginTop: 6 }}>{item.name ?? 'Product'}</div>
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={name}
+                  style={{ width: '100%', height: 60, borderRadius: 6, objectFit: 'cover' }}
+                />
+              ) : (
+                <div style={{ height: 60, background: '#f1f5f9', borderRadius: 6 }} />
+              )}
+              <div style={{ fontSize: 12, fontWeight: 600, marginTop: 6 }}>{name}</div>
             </div>
-          ))}
+            );
+          })}
         </div>
         <div
           style={{

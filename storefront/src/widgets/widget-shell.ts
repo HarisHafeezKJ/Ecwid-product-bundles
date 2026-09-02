@@ -323,6 +323,7 @@ export function showAtcSuccess(root: HTMLElement, state: WidgetShellState): void
   btn.disabled = false;
   btn.textContent = successText;
   announceAtcStatus(root, successText);
+  btn.focus();
   window.setTimeout(() => {
     btn.classList.remove('pb-btn--success');
     setAddingState(root, false, state.view);

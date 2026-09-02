@@ -2,11 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import type { BundleRule, RuleType } from '@pb/shared';
 import { draftFromRule } from '../components/editor/editor-draft';
 import type { OfferDraft } from '../components/editor/editor-draft';
+import ConfirmModal from '../components/ConfirmModal';
 import CreateOfferModal from '../components/CreateOfferModal';
 import HelpCard from '../components/HelpCard';
 import OffersTable from '../components/OffersTable';
+import Toast from '../components/Toast';
 import ViewsStats from '../components/ViewsStats';
 import { useRules } from '../hooks/useRules';
+
+const HERO_DISMISS_KEY = 'pb_hero_dismissed';
 
 const SUPPORT_EMAIL = 'support@fmemodules.com';
 const SUPPORT_WHATSAPP = '923315986829';
@@ -35,7 +39,11 @@ export default function DashboardHome({
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [createOpen, setCreateOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<BundleRule | null>(null);
+  const [toast, setToast] = useState<{ message: string; error?: boolean } | null>(null);
+  const [heroDismissed, setHeroDismissed] = useState(
+    () => localStorage.getItem(HERO_DISMISS_KEY) === '1',
+  );
 
   useEffect(() => {
     void refresh();
@@ -65,17 +73,26 @@ export default function DashboardHome({
   }, [rules, search, typeFilter, statusFilter]);
 
   const showToast = (message: string, isError = false) => {
-    setToast(message);
-    setTimeout(() => setToast(null), 3200);
+    setToast({ message, error: isError });
     if (isError) console.error(message);
+  };
+
+  const dismissHero = () => {
+    localStorage.setItem(HERO_DISMISS_KEY, '1');
+    setHeroDismissed(true);
   };
 
   return (
     <>
-      <section className="hero-banner">
-        <h2>Increase average order value with bundles and upsells</h2>
-        <p>Create quantity breaks, fixed bundles, mix &amp; match pools, and cart upsells.</p>
-      </section>
+      {!heroDismissed && (
+        <section className="hero-banner">
+          <button type="button" className="hero-dismiss" onClick={dismissHero} aria-label="Dismiss">
+            ×
+          </button>
+          <h2>Increase average order value with bundles and upsells</h2>
+          <p>Create quantity breaks, fixed bundles, mix &amp; match pools, and cart upsells.</p>
+        </section>
+      )}
 
       <div className="stats-row">
         <ViewsStats settings={settings} loading={loading} />
@@ -133,15 +150,8 @@ export default function DashboardHome({
                 showToast('Could not update status.', true);
               }
             }}
-            onDelete={async (rule) => {
-              if (!window.confirm(`Delete "${rule.title}"? This cannot be undone.`)) return;
-              try {
-                await removeRule(rule.id);
-                showToast('Offer deleted.');
-              } catch {
-                showToast('Could not delete offer.', true);
-              }
-            }}
+            onCreateEmpty={() => setCreateOpen(true)}
+            onDelete={(rule) => setDeleteTarget(rule)}
           />
         </div>
       </div>
@@ -156,7 +166,30 @@ export default function DashboardHome({
         />
       )}
 
-      {toast && <div className={`toast${toast.includes('Could not') ? ' error' : ''}`}>{toast}</div>}
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete offer"
+          message={`Delete "${deleteTarget.title}"? This cannot be undone.`}
+          confirmLabel="Delete"
+          danger
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={() => {
+            const rule = deleteTarget;
+            setDeleteTarget(null);
+            void removeRule(rule.id)
+              .then(() => showToast('Offer deleted.'))
+              .catch(() => showToast('Could not delete offer.', true));
+          }}
+        />
+      )}
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          error={toast.error}
+          onClose={() => setToast(null)}
+        />
+      )}
     </>
   );
 }

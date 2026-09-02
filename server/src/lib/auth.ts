@@ -16,6 +16,8 @@ import {
   persistOAuthTokens,
   ensureStoreTokens,
 } from './storage/oauth-cache.js';
+import { getStoreCurrency } from './store-currency.js';
+import { privateStoreTokens } from './ecwid.js';
 
 loadEnvFiles();
 
@@ -95,11 +97,6 @@ function decodeSessionPayload(raw: string): PbSession | undefined {
       const accessToken = decryptAccessToken(parsed.t);
       if (!accessToken) return undefined;
       return { storeId: parsed.storeId, accessToken };
-    }
-
-    // Legacy v1 sessions (plaintext accessToken) — still accepted during migration.
-    if (parsed.accessToken) {
-      return { storeId: parsed.storeId, accessToken: parsed.accessToken };
     }
 
     return undefined;
@@ -242,6 +239,11 @@ export async function persistStoreAuth(
   publicToken?: string,
 ): Promise<void> {
   await persistOAuthTokens(storeId, accessToken, publicToken);
+  // Seed the currency cache (and pb_settings) so the first storefront request
+  // after a cold start does not have to wait on /profile.
+  void getStoreCurrency(privateStoreTokens(storeId, accessToken, publicToken)).catch((err) => {
+    console.warn('[pb] seed store currency failed', err);
+  });
 }
 
 export async function getStoreTokens(storeId: string): Promise<EcwidStoreTokens | null> {

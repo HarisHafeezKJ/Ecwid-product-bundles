@@ -14,6 +14,7 @@ let lastRenderedProductId: string | undefined;
 let initInFlight = false;
 let pendingInitPage: EcwidPage | undefined;
 let mountWatcher: MutationObserver | null = null;
+let watchedRoot: Element | null = null;
 const offerCache = new Map<string, { views: StorefrontWidgetView[]; expiresAt: number }>();
 
 const debouncedRemountCheck = debounce(() => {
@@ -56,7 +57,11 @@ export async function initProductWidgets(page?: EcwidPage): Promise<void> {
     const host = await ensureProductHost();
     if (!host || host.hidden) return;
 
-    host.innerHTML = '<div class="pb-loading">Loading offers…</div>';
+    host.innerHTML =
+      '<div class="pb-loading" aria-busy="true" aria-label="Loading offers">' +
+      '<div class="pb-loading__shimmer"></div>' +
+      '<div class="pb-loading__shimmer pb-loading__shimmer--short"></div>' +
+      '</div>';
 
     const views = await loadViews(productId);
     if (!views.length) {
@@ -253,15 +258,43 @@ async function ensureProductHost(): Promise<HTMLElement | null> {
   return host;
 }
 
+/**
+ * Instant Site sliders and chat widgets mutate `document.body` constantly.
+ * Watch the store/product container instead so remount checks only run when
+ * the product page itself is rewritten. If Instant Site replaces that node,
+ * re-attach to the new ancestor.
+ */
+function findMountWatcherRoot(): Element {
+  return (
+    document.querySelector('.ec-store__content-wrapper') ??
+    document.querySelector('.ec-store') ??
+    document.querySelector('.ecwid-productBrowser') ??
+    document.querySelector('.details-product-page') ??
+    document.querySelector('[data-hook="product-page"]') ??
+    document.body
+  );
+}
+
 function startMountWatcher(): void {
-  if (mountWatcher) return;
-  mountWatcher = new MutationObserver(() => debouncedRemountCheck());
-  mountWatcher.observe(document.body, { childList: true, subtree: true });
+  const root = findMountWatcherRoot();
+  if (mountWatcher && watchedRoot === root && document.contains(root)) return;
+
+  stopMountWatcher();
+  watchedRoot = root;
+  mountWatcher = new MutationObserver(() => {
+    if (watchedRoot && !document.contains(watchedRoot)) {
+      stopMountWatcher();
+      startMountWatcher();
+    }
+    debouncedRemountCheck();
+  });
+  mountWatcher.observe(root, { childList: true, subtree: true });
 }
 
 function stopMountWatcher(): void {
   mountWatcher?.disconnect();
   mountWatcher = null;
+  watchedRoot = null;
 }
 
 function mountOfferView(host: HTMLElement, view: StorefrontWidgetView): void {

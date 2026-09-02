@@ -1,5 +1,5 @@
 import type { BundleRule, RuleType } from '@pb/shared';
-import type { EcwidStoreTokens } from './ecwid.js';
+import { isPrivateStoreTokens, type EcwidStoreTokens } from './ecwid.js';
 import { listActiveRulesForStore } from './db/rules.js';
 import {
   listActiveRulesFromEmbeddedPublicConfig,
@@ -67,7 +67,7 @@ export async function resolveRules(opts: ResolveRulesOptions): Promise<ResolveRu
   }
 
   const cachedPrivate = await getOAuthTokens(storeId);
-  if (cachedPrivate?.accessToken) {
+  if (cachedPrivate && isPrivateStoreTokens(cachedPrivate)) {
     try {
       const rules = filterRules(await listActiveRulesForStore(storeId, opts.ruleType), opts);
       if (rules.length > 0) return { rules, source: 'db' };

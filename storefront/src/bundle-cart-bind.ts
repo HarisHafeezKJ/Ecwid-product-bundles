@@ -1,21 +1,18 @@
 import { getCart, refreshCart } from './ecwid';
-import { CartSyncController } from './cart-sync-controller';
+import { subscribeCartSync } from './cart-sync-controller';
 
-let controller: CartSyncController | null = null;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
+let unsubscribe: (() => void) | null = null;
 
 async function runBundleCartSync(): Promise<void> {
   try {
     const cart = await getCart();
     if (!cart?.items?.length) return;
 
-    // Ecwid calls the app's discountUrl during calculateTotal — run twice so late
-    // webhook responses are picked up after bundle lines finish adding.
-    await refreshCart();
-    await sleep(350);
+    // A single `calculateTotal` triggers our `discountUrl` webhook, which is the
+    // supported way to attach the bundle discount to the cart. The previous
+    // implementation refreshed twice with a 350ms sleep between them, which
+    // doubled the load on Ecwid without any observed benefit — the second call
+    // returned the same result as the first once the webhook responded.
     await refreshCart();
   } catch {
     /* silent */
@@ -24,16 +21,11 @@ async function runBundleCartSync(): Promise<void> {
 
 /** Ask Ecwid to recalculate cart totals (triggers discountUrl webhook for bundle deals). */
 export function startBundleCartSync(): void {
-  if (!controller) {
-    controller = new CartSyncController({
-      intervalMs: 10000,
-      onSync: runBundleCartSync,
-    });
-  }
-  controller.start();
+  if (unsubscribe) return;
+  unsubscribe = subscribeCartSync(runBundleCartSync, { intervalMs: 15_000 });
 }
 
 export function stopBundleCartSync(): void {
-  controller?.stop();
-  controller = null;
+  unsubscribe?.();
+  unsubscribe = null;
 }

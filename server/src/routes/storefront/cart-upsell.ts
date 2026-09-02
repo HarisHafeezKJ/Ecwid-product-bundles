@@ -6,7 +6,7 @@ import { buildCartUpsellView } from '../../lib/build-cart-upsell.js';
 import { serializeCartUpsellOffer } from '../../lib/serialize-cart-upsell.js';
 import { corsHeaders, jsonResponse } from '../../lib/api-response.js';
 import { getStoreTokens } from '../../lib/auth.js';
-import { getStoreProfile } from '../../lib/ecwid.js';
+import { getStoreCurrency } from '../../lib/store-currency.js';
 import { requireStoreId } from '../../lib/store-context.js';
 
 function parseProductIds(req: { query: Record<string, unknown>; body?: Record<string, unknown> }): string[] {
@@ -89,14 +89,7 @@ async function handleCartUpsell(
       return;
     }
 
-    let currency = 'USD';
-    try {
-      const profile = await getStoreProfile(tokens);
-      const raw = profile.formatsAndUnits as { currency?: string } | undefined;
-      if (raw?.currency) currency = String(raw.currency);
-    } catch {
-      /* optional */
-    }
+    const currency = await getStoreCurrency(tokens, settings.currency);
 
     jsonResponse(res, req, { offers: [serializeCartUpsellOffer(view)], enabled: true, currency });
   } catch (err) {

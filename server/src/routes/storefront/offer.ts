@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { incrementMonthlyViews } from '../../lib/db/settings.js';
 import { buildStorefrontWidgetViews } from '../../lib/build-widget-view.js';
 import { serializeWidgetView } from '../../lib/serialize-widget-view.js';
-import { getStoreProfile } from '../../lib/ecwid.js';
+import { getStoreCurrency } from '../../lib/store-currency.js';
 import {
   CLIENT_ERRORS,
   corsHeaders,
@@ -12,6 +12,7 @@ import {
 } from '../../lib/api-response.js';
 import { resolveRules } from '../../lib/storefront-rules.js';
 import { getOAuthTokens } from '../../lib/storage/oauth-cache.js';
+import { isPrivateStoreTokens } from '../../lib/storefront-tokens.js';
 import { resolveStorefrontTokens } from '../../lib/storefront-tokens.js';
 import { requireStoreId } from '../../lib/store-context.js';
 import { parseOfferBody } from '../../lib/validate-body.js';
@@ -42,10 +43,12 @@ async function handleOffer(
     }
 
     let overViewLimit = false;
-    if (!ruleId && cachedPrivate?.accessToken) {
+    let persistedCurrency: string | undefined;
+    if (!ruleId && cachedPrivate && isPrivateStoreTokens(cachedPrivate)) {
       try {
         const settings = await incrementMonthlyViews(storeId);
         overViewLimit = settings.currentViewsCount > settings.monthlyViewsLimit;
+        persistedCurrency = settings.currency;
       } catch (err) {
         console.warn('[pb-offer] incrementMonthlyViews failed', err);
       }
@@ -69,14 +72,7 @@ async function handleOffer(
       return;
     }
 
-    let currency = 'USD';
-    try {
-      const profile = await getStoreProfile(tokens);
-      const raw = profile.formatsAndUnits as { currency?: string } | undefined;
-      if (raw?.currency) currency = String(raw.currency);
-    } catch {
-      /* optional */
-    }
+    const currency = await getStoreCurrency(tokens, persistedCurrency);
 
     const serialized = views.map((view) => serializeWidgetView(view, currency));
     const payload =

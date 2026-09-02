@@ -35,7 +35,7 @@ function BundleItemCard({
         {product?.imageUrl ?? item.imageUrl ? (
           <img
             src={product?.imageUrl ?? item.imageUrl}
-            alt=""
+            alt={product?.name ?? item.name ?? item.productId}
             style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover' }}
           />
         ) : (
@@ -61,25 +61,28 @@ function BundleItemCard({
             </div>
             {hasVariants && (
               <div className="field">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={!item.chooseVariationPerItem}
-                    onChange={(e) =>
-                      onChange({
-                        ...item,
-                        chooseVariationPerItem: !e.target.checked,
-                        adminLocksVariant: e.target.checked,
-                      })
-                    }
-                    style={{ marginRight: 6 }}
-                  />
-                  Lock variation
-                </label>
+                <label htmlFor={`variant-mode-${item.productId}`}>Variation</label>
+                <select
+                  id={`variant-mode-${item.productId}`}
+                  value={item.adminLocksVariant ? 'LOCKED' : 'CUSTOMER'}
+                  onChange={(e) => {
+                    const locked = e.target.value === 'LOCKED';
+                    onChange({
+                      ...item,
+                      adminLocksVariant: locked,
+                      chooseVariationPerItem: !locked,
+                      defaultVariantId: locked ? item.defaultVariantId : undefined,
+                    });
+                  }}
+                >
+                  <option value="CUSTOMER">Customer chooses variation</option>
+                  <option value="LOCKED">Lock to a specific variation</option>
+                </select>
                 {item.adminLocksVariant && (
                   <select
                     value={item.defaultVariantId ?? ''}
                     onChange={(e) => onChange({ ...item, defaultVariantId: e.target.value })}
+                    style={{ marginTop: 8 }}
                   >
                     <option value="">Select variation</option>
                     {variants.map((v) => (

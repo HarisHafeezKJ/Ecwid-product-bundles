@@ -2,10 +2,30 @@ import type { CatalogProduct, CatalogVariant } from '@pb/shared';
 
 const ECWID_API_BASE = 'https://app.ecwid.com/api/v3';
 
+export type EcwidTokenKind = 'private' | 'public';
+
 export interface EcwidStoreTokens {
   storeId: string;
   accessToken: string;
   publicToken?: string;
+  /** Whether `accessToken` is the merchant OAuth token or a storefront public token. */
+  tokenKind: EcwidTokenKind;
+}
+
+export function isPrivateStoreTokens(tokens: EcwidStoreTokens): boolean {
+  return tokens.tokenKind === 'private';
+}
+
+export function privateStoreTokens(
+  storeId: string,
+  accessToken: string,
+  publicToken?: string,
+): EcwidStoreTokens {
+  return { storeId, accessToken, publicToken, tokenKind: 'private' };
+}
+
+export function publicStoreTokens(storeId: string, publicToken: string): EcwidStoreTokens {
+  return { storeId, accessToken: publicToken, publicToken, tokenKind: 'public' };
 }
 
 export interface EcwidCartItem {
@@ -228,7 +248,7 @@ export async function ensureNameYourPriceEnabled(
   tokens: EcwidStoreTokens,
   productIds: string[],
 ): Promise<void> {
-  if (!tokens.accessToken || productIds.length === 0) return;
+  if (!isPrivateStoreTokens(tokens) || productIds.length === 0) return;
   const unique = [...new Set(productIds.filter(Boolean))];
   await Promise.all(
     unique.map(async (productId) => {
@@ -244,13 +264,66 @@ export async function ensureNameYourPriceEnabled(
   );
 }
 
+/**
+ * Ecwid's REST API accepts a comma-separated `productId` filter that returns
+ * many products in a single response. Fanning out to `GET /products/:id` per
+ * ID (as we used to) turned a 5-item bundle add-to-cart into 5 sequential
+ * ~250ms round-trips. The batch path resolves the same set of IDs in a single
+ * hop and falls back to per-id fetches only when the batch response fails.
+ *
+ * Ecwid enforces a hard cap of 100 IDs per request, so long lists are chunked.
+ */
+const PRODUCT_BATCH_SIZE = 100;
+
+async function fetchProductBatch(
+  tokens: EcwidStoreTokens,
+  batch: string[],
+): Promise<CatalogProduct[]> {
+  const params = new URLSearchParams({
+    productId: batch.join(','),
+    limit: String(batch.length),
+  });
+  try {
+    const data = await ecwidFetch<{ items?: Record<string, unknown>[] }>(
+      tokens.storeId,
+      catalogApiToken(tokens),
+      `/products?${params.toString()}`,
+    );
+    return (data.items ?? []).map(mapEcwidProduct);
+  } catch (err) {
+    console.warn('[pb] batch product fetch failed, falling back to per-id', err);
+    const fallback = await Promise.all(batch.map((id) => getProduct(tokens, id)));
+    return fallback.filter((p): p is CatalogProduct => p !== null);
+  }
+}
+
 export async function getProducts(
   tokens: EcwidStoreTokens,
   productIds: string[],
 ): Promise<CatalogProduct[]> {
   const unique = [...new Set(productIds.filter(Boolean))];
-  const results = await Promise.all(unique.map((id) => getProduct(tokens, id)));
-  return results.filter((p): p is CatalogProduct => p !== null);
+  if (unique.length === 0) return [];
+  if (unique.length === 1) {
+    const one = await getProduct(tokens, unique[0]!);
+    return one ? [one] : [];
+  }
+
+  const batches: string[][] = [];
+  for (let i = 0; i < unique.length; i += PRODUCT_BATCH_SIZE) {
+    batches.push(unique.slice(i, i + PRODUCT_BATCH_SIZE));
+  }
+
+  const batchResults = await Promise.all(batches.map((batch) => fetchProductBatch(tokens, batch)));
+  const seen = new Set<string>();
+  const merged: CatalogProduct[] = [];
+  for (const batch of batchResults) {
+    for (const product of batch) {
+      if (seen.has(product.id)) continue;
+      seen.add(product.id);
+      merged.push(product);
+    }
+  }
+  return merged;
 }
 
 export async function searchProducts(
@@ -323,6 +396,9 @@ export async function removeCartLine(
 }
 
 export async function getStoreProfile(tokens: EcwidStoreTokens): Promise<Record<string, unknown>> {
+  if (!isPrivateStoreTokens(tokens)) {
+    throw new Error('Store profile requires a private access token');
+  }
   return ecwidFetch(tokens.storeId, tokens.accessToken, '/profile');
 }
 

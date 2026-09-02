@@ -12,7 +12,7 @@ import {
   bestVolumeTier,
 } from '@pb/shared';
 import type { EcwidStoreTokens } from './ecwid.js';
-import { getProduct, defaultProductOptions } from './ecwid.js';
+import { defaultProductOptions, getProduct, getProducts } from './ecwid.js';
 import { ClientError } from './api-response.js';
 
 export interface PriceLineInput {
@@ -21,19 +21,35 @@ export interface PriceLineInput {
   quantity: number;
 }
 
+export type ProductCache = Map<string, CatalogProduct>;
+
+async function resolveProduct(
+  tokens: EcwidStoreTokens,
+  productId: string,
+  cache: ProductCache,
+): Promise<CatalogProduct> {
+  const cached = cache.get(productId);
+  if (cached) return cached;
+
+  const fetched = await getProduct(tokens, productId);
+  if (!fetched) {
+    throw new ClientError(`Product ${productId} could not be loaded from the store catalog`);
+  }
+  cache.set(productId, fetched);
+  return fetched;
+}
+
 async function unitPriceForProduct(
   tokens: EcwidStoreTokens,
   productId: string,
-  variantId?: string,
+  variantId: string | undefined,
+  cache: ProductCache,
 ): Promise<{
   product: CatalogProduct;
   unitPrice: number;
   variantOptions?: Record<string, string>;
 }> {
-  const product = await getProduct(tokens, productId);
-  if (!product) {
-    throw new ClientError(`Product ${productId} could not be loaded from the store catalog`);
-  }
+  const product = await resolveProduct(tokens, productId, cache);
   if (!product.inStock) {
     throw new ClientError(`${product.name || productId} is out of stock`);
   }
@@ -84,21 +100,49 @@ function dealIdFor(rule: BundleRule, suffix: string): string {
   return `${rule.id}:${suffix}`;
 }
 
+/**
+ * Prime a product cache with a single batch fetch for every product referenced by
+ * the incoming lines (and any fixed-bundle components the caller may have added).
+ * Subsequent `resolveProduct` lookups become synchronous map reads, so a bundle
+ * add-to-cart makes one Ecwid catalog round-trip instead of one per line.
+ */
+export async function primeProductCache(
+  tokens: EcwidStoreTokens,
+  productIds: Iterable<string>,
+  cache: ProductCache = new Map(),
+): Promise<ProductCache> {
+  const needed = new Set<string>();
+  for (const id of productIds) {
+    if (id && !cache.has(id)) needed.add(id);
+  }
+  if (needed.size === 0) return cache;
+
+  const loaded = await getProducts(tokens, [...needed]);
+  for (const product of loaded) {
+    cache.set(product.id, product);
+  }
+  return cache;
+}
+
 export async function priceLinesForRule(
   tokens: EcwidStoreTokens,
   rule: BundleRule,
   lines: PriceLineInput[],
+  productCache?: ProductCache,
 ): Promise<PricedLine[]> {
   if (rule.status !== 'ACTIVE') throw new Error('Bundle is not available');
   const promoLabel = discountDisplayName(rule);
 
+  const cache = productCache ?? new Map<string, CatalogProduct>();
+  await primeProductCache(tokens, lines.map((l) => l.productId), cache);
+
   switch (rule.ruleType) {
     case 'FIXED_BUNDLE':
-      return priceFixedBundle(tokens, rule, lines, promoLabel);
+      return priceFixedBundle(tokens, rule, lines, promoLabel, cache);
     case 'VOLUME_DISCOUNT':
-      return priceVolumeDiscount(tokens, rule, lines, promoLabel);
+      return priceVolumeDiscount(tokens, rule, lines, promoLabel, cache);
     case 'MIX_AND_MATCH':
-      return priceMixMatch(tokens, rule, lines, promoLabel);
+      return priceMixMatch(tokens, rule, lines, promoLabel, cache);
     default:
       throw new Error('Bundle is not available');
   }
@@ -109,6 +153,7 @@ async function priceFixedBundle(
   rule: BundleRule,
   lines: PriceLineInput[],
   promoLabel: string,
+  cache: ProductCache,
 ): Promise<PricedLine[]> {
   const items = parseBundleItems(rule.items).components;
   if (items.length < 2) throw new Error('Bundle is incomplete');
@@ -129,39 +174,39 @@ async function priceFixedBundle(
     if (totalQty < minQty) throw new Error('Bundle is not available');
   }
 
-  const priced: PricedLine[] = [];
-  for (const line of lines) {
-    const item = items.find((i) => i.productId === line.productId);
-    const qty = Math.max(1, line.quantity);
+  return Promise.all(
+    lines.map(async (line) => {
+      const item = items.find((i) => i.productId === line.productId);
+      const qty = Math.max(1, line.quantity);
 
-    const variantId =
-      line.variantId ?? (item?.adminLocksVariant ? item.defaultVariantId : undefined);
+      const variantId =
+        line.variantId ?? (item?.adminLocksVariant ? item.defaultVariantId : undefined);
 
-    const { unitPrice: catalogPrice, variantOptions } = await unitPriceForProduct(
-      tokens,
-      line.productId,
-      variantId,
-    );
-    const sale = bundleLineSale(catalogPrice, rule.discountType, rule.discountValue);
-    const dealId = dealIdFor(rule, 'bundle');
+      const { unitPrice: catalogPrice, variantOptions } = await unitPriceForProduct(
+        tokens,
+        line.productId,
+        variantId,
+        cache,
+      );
+      const sale = bundleLineSale(catalogPrice, rule.discountType, rule.discountValue);
+      const dealId = dealIdFor(rule, 'bundle');
 
-    priced.push({
-      productId: line.productId,
-      variantId,
-      quantity: qty,
-      unitPrice: sale,
-      catalogPrice,
-      offerId: rule.id,
-      dealId,
-      promoLabel,
-      options: mergeCartOptions(
-        variantOptions,
-        stampOptions(rule.id, dealId, 'pb-combo'),
-      ),
-    });
-  }
-
-  return priced;
+      return {
+        productId: line.productId,
+        variantId,
+        quantity: qty,
+        unitPrice: sale,
+        catalogPrice,
+        offerId: rule.id,
+        dealId,
+        promoLabel,
+        options: mergeCartOptions(
+          variantOptions,
+          stampOptions(rule.id, dealId, 'pb-combo'),
+        ),
+      };
+    }),
+  );
 }
 
 async function priceVolumeDiscount(
@@ -169,46 +214,47 @@ async function priceVolumeDiscount(
   rule: BundleRule,
   lines: PriceLineInput[],
   promoLabel: string,
+  cache: ProductCache,
 ): Promise<PricedLine[]> {
   const tiers = (rule.volumeTiers?.tiers ?? []).filter(isTierDiscountable);
   if (tiers.length === 0) throw new Error('Quantity break is not available');
 
   const pool = rule.applyToAllProducts ? null : new Set(mixPoolProductIds(rule));
-  const priced: PricedLine[] = [];
 
-  for (const line of lines) {
-    if (pool && !pool.has(line.productId) && line.productId !== rule.targetProductId) {
-      throw new Error('Product is not in this quantity break');
-    }
+  return Promise.all(
+    lines.map(async (line) => {
+      if (pool && !pool.has(line.productId) && line.productId !== rule.targetProductId) {
+        throw new Error('Product is not in this quantity break');
+      }
 
-    const tier = exactVolumeTier(tiers, line.quantity);
-    if (!tier) throw new Error('Quantity break is not available');
+      const tier = exactVolumeTier(tiers, line.quantity);
+      if (!tier) throw new Error('Quantity break is not available');
 
-    const { unitPrice: catalogPrice, variantOptions } = await unitPriceForProduct(
-      tokens,
-      line.productId,
-      line.variantId,
-    );
-    const sale = exactVolumeUnitPrice(catalogPrice, tier);
-    const dealId = dealIdFor(rule, `vol-${tier.qty}`);
+      const { unitPrice: catalogPrice, variantOptions } = await unitPriceForProduct(
+        tokens,
+        line.productId,
+        line.variantId,
+        cache,
+      );
+      const sale = exactVolumeUnitPrice(catalogPrice, tier);
+      const dealId = dealIdFor(rule, `vol-${tier.qty}`);
 
-    priced.push({
-      productId: line.productId,
-      variantId: line.variantId,
-      quantity: line.quantity,
-      unitPrice: sale,
-      catalogPrice,
-      offerId: rule.id,
-      dealId,
-      promoLabel,
-      options: mergeCartOptions(
-        variantOptions,
-        stampOptions(rule.id, dealId, 'pb-volume'),
-      ),
-    });
-  }
-
-  return priced;
+      return {
+        productId: line.productId,
+        variantId: line.variantId,
+        quantity: line.quantity,
+        unitPrice: sale,
+        catalogPrice,
+        offerId: rule.id,
+        dealId,
+        promoLabel,
+        options: mergeCartOptions(
+          variantOptions,
+          stampOptions(rule.id, dealId, 'pb-volume'),
+        ),
+      };
+    }),
+  );
 }
 
 async function priceMixMatch(
@@ -216,6 +262,7 @@ async function priceMixMatch(
   rule: BundleRule,
   lines: PriceLineInput[],
   promoLabel: string,
+  cache: ProductCache,
 ): Promise<PricedLine[]> {
   const pool = new Set(mixPoolProductIds(rule));
   if (pool.size === 0) throw new Error('Bundle is incomplete');
@@ -225,32 +272,32 @@ async function priceMixMatch(
   const tier = bestVolumeTier(tiers, totalQty);
   if (!tier) throw new Error('Bundle is not available');
 
-  const priced: PricedLine[] = [];
-  for (const line of lines) {
-    if (!pool.has(line.productId)) throw new Error('Bundle is not available');
-    const { unitPrice: catalogPrice, variantOptions } = await unitPriceForProduct(
-      tokens,
-      line.productId,
-      line.variantId,
-    );
-    const sale = volumeUnitPrice(catalogPrice, tier);
-    const dealId = dealIdFor(rule, `mix-${tier.qty}`);
+  return Promise.all(
+    lines.map(async (line) => {
+      if (!pool.has(line.productId)) throw new Error('Bundle is not available');
+      const { unitPrice: catalogPrice, variantOptions } = await unitPriceForProduct(
+        tokens,
+        line.productId,
+        line.variantId,
+        cache,
+      );
+      const sale = volumeUnitPrice(catalogPrice, tier);
+      const dealId = dealIdFor(rule, `mix-${tier.qty}`);
 
-    priced.push({
-      productId: line.productId,
-      variantId: line.variantId,
-      quantity: line.quantity,
-      unitPrice: sale,
-      catalogPrice,
-      offerId: rule.id,
-      dealId,
-      promoLabel,
-      options: mergeCartOptions(
-        variantOptions,
-        stampOptions(rule.id, dealId, 'pb-volume'),
-      ),
-    });
-  }
-
-  return priced;
+      return {
+        productId: line.productId,
+        variantId: line.variantId,
+        quantity: line.quantity,
+        unitPrice: sale,
+        catalogPrice,
+        offerId: rule.id,
+        dealId,
+        promoLabel,
+        options: mergeCartOptions(
+          variantOptions,
+          stampOptions(rule.id, dealId, 'pb-volume'),
+        ),
+      };
+    }),
+  );
 }

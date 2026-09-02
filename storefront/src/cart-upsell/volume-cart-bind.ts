@@ -1,8 +1,8 @@
 import { syncVolumeCart } from '../api';
 import { cartIdFrom, cartLineSnapshots, getCart, refreshCart } from '../ecwid';
-import { CartSyncController } from '../cart-sync-controller';
+import { subscribeCartSync } from '../cart-sync-controller';
 
-let controller: CartSyncController | null = null;
+let unsubscribe: (() => void) | null = null;
 
 async function runVolumeSync(): Promise<void> {
   try {
@@ -22,16 +22,11 @@ async function runVolumeSync(): Promise<void> {
 }
 
 export function startVolumeCartSync(): void {
-  if (!controller) {
-    controller = new CartSyncController({
-      intervalMs: 12000,
-      onSync: runVolumeSync,
-    });
-  }
-  controller.start();
+  if (unsubscribe) return;
+  unsubscribe = subscribeCartSync(runVolumeSync, { intervalMs: 12_000 });
 }
 
 export function stopVolumeCartSync(): void {
-  controller?.stop();
-  controller = null;
+  unsubscribe?.();
+  unsubscribe = null;
 }
