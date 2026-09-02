@@ -25,20 +25,24 @@ function labelMatchesDealStamp(text: string | null | undefined): boolean {
   return normalized === PB_DEAL_TEXT_OPTION.toLowerCase() || normalized === '_pbdeal';
 }
 
+function hideElement(node: Element | null | undefined): void {
+  if (node instanceof HTMLElement) node.style.display = 'none';
+}
+
 /** Hide the internal `_pbDeal` option Ecwid renders on PDP/cart — shoppers never fill this in. */
 export function hideDealStampFields(root: ParentNode = document): void {
   const inputs = root.querySelectorAll<HTMLElement>(
     `input[name="${PB_DEAL_TEXT_OPTION}"], input[name*="${PB_DEAL_TEXT_OPTION}"], textarea[name="${PB_DEAL_TEXT_OPTION}"], textarea[name*="${PB_DEAL_TEXT_OPTION}"]`,
   );
   for (const input of inputs) {
-    const block =
+    hideElement(
       input.closest('.product-details__option') ??
-      input.closest('.details-product-option') ??
-      input.closest('.ecwid-productOption') ??
-      input.closest('.product-details-module__option') ??
-      input.closest('.ec-cart-option') ??
-      input.parentElement;
-    if (block) block.style.display = 'none';
+        input.closest('.details-product-option') ??
+        input.closest('.ecwid-productOption') ??
+        input.closest('.product-details-module__option') ??
+        input.closest('.ec-cart-option') ??
+        input.parentElement,
+    );
   }
 
   const labels = root.querySelectorAll<HTMLLabelElement>('label');
@@ -46,13 +50,13 @@ export function hideDealStampFields(root: ParentNode = document): void {
     const text = label.textContent ?? '';
     const forAttr = label.getAttribute('for') ?? '';
     if (labelMatchesDealStamp(text) || forAttr.includes(PB_DEAL_TEXT_OPTION)) {
-      const block =
+      hideElement(
         label.closest('.product-details__option') ??
-        label.closest('.details-product-option') ??
-        label.closest('.ecwid-productOption') ??
-        label.closest('.product-details-module__option') ??
-        label.parentElement;
-      if (block) block.style.display = 'none';
+          label.closest('.details-product-option') ??
+          label.closest('.ecwid-productOption') ??
+          label.closest('.product-details-module__option') ??
+          label.parentElement,
+      );
     }
   }
 }
