@@ -65,12 +65,14 @@
 .pb-upsell__select-btn {
   margin-top: 0.5rem;
   width: 100%;
-  border: 1px solid #d1d5db;
-  background: #fff;
-  border-radius: 8px;
+  border: 1px solid var(--pb-upsell-card-border, #d1d5db);
+  background: var(--pb-cta-bg, #fff);
+  color: var(--pb-cta-color, #111827);
+  border-radius: var(--pb-cta-radius, 8px);
   padding: 0.35rem 0.5rem;
   min-height: 44px;
-  font-size: 12px;
+  font-size: var(--pb-cta-size, 12px);
+  font-weight: var(--pb-cta-font-weight, 600);
   cursor: pointer;
 }
 

@@ -1,3 +1,22 @@
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import type { DraggableAttributes } from '@dnd-kit/core';
+import type { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
 import type { BundleItem, CatalogProduct } from '@pb/shared';
 import { formatMoney } from '@pb/shared';
 import { useProductMap } from '../../hooks/useProducts';
@@ -9,6 +28,19 @@ interface EditorBundleProductsProps {
   onChange: (patch: Partial<OfferDraft>) => void;
 }
 
+interface BundleItemCardProps {
+  item: BundleItem;
+  product?: CatalogProduct;
+  index: number;
+  total: number;
+  onChange: (item: BundleItem) => void;
+  onRemove: () => void;
+  onMove: (dir: -1 | 1) => void;
+  dragAttributes?: DraggableAttributes;
+  dragListeners?: SyntheticListenerMap;
+  isDragging?: boolean;
+}
+
 function BundleItemCard({
   item,
   product,
@@ -17,21 +49,30 @@ function BundleItemCard({
   onChange,
   onRemove,
   onMove,
-}: {
-  item: BundleItem;
-  product?: CatalogProduct;
-  index: number;
-  total: number;
-  onChange: (item: BundleItem) => void;
-  onRemove: () => void;
-  onMove: (dir: -1 | 1) => void;
-}) {
+  dragAttributes,
+  dragListeners,
+  isDragging,
+}: BundleItemCardProps) {
   const variants = product?.variants ?? [];
   const hasVariants = variants.length > 0;
+  const sortable = total > 1 && dragAttributes != null && dragListeners != null;
 
   return (
-    <div className="section-card" style={{ marginBottom: 12 }}>
+    <div className={`section-card bundle-item-card${isDragging ? ' bundle-item-card--dragging' : ''}`}>
       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+        {sortable && (
+          <button
+            type="button"
+            className="bundle-item-drag-handle"
+            aria-label={`Drag to reorder ${product?.name ?? item.name ?? item.productId}`}
+            {...dragAttributes}
+            {...dragListeners}
+          >
+            <span className="bundle-item-drag-handle__icon" aria-hidden="true">
+              ⋮⋮
+            </span>
+          </button>
+        )}
         {product?.imageUrl ?? item.imageUrl ? (
           <img
             src={product?.imageUrl ?? item.imageUrl}
@@ -92,6 +133,16 @@ function BundleItemCard({
                     ))}
                   </select>
                 )}
+                {hasVariants && !item.adminLocksVariant && (item.minQuantity ?? 1) > 1 && (
+                  <p className="field-hint" style={{ marginTop: 8 }}>
+                    Customers choose a separate variation for each unit (e.g. Size 1, Size 2).
+                  </p>
+                )}
+                {hasVariants && item.adminLocksVariant && (item.minQuantity ?? 1) > 1 && (
+                  <p className="field-hint" style={{ marginTop: 8 }}>
+                    All units use the locked variation above.
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -112,9 +163,43 @@ function BundleItemCard({
   );
 }
 
+function SortableBundleItemCard(props: Omit<BundleItemCardProps, 'dragAttributes' | 'dragListeners' | 'isDragging'>) {
+  const { item } = props;
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.productId,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    marginBottom: 12,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <BundleItemCard
+        {...props}
+        isDragging={isDragging}
+        dragAttributes={attributes}
+        dragListeners={listeners}
+      />
+    </div>
+  );
+}
+
 export default function EditorBundleProducts({ draft, onChange }: EditorBundleProductsProps) {
   const items = draft.items.components;
   const productMap = useProductMap(items.map((item) => item.productId));
+  const sortableIds = items.map((item) => item.productId);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
 
   const updateItems = (next: BundleItem[]) => {
     onChange({
@@ -129,10 +214,23 @@ export default function EditorBundleProducts({ draft, onChange }: EditorBundlePr
     });
   };
 
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = items.findIndex((item) => item.productId === active.id);
+    const newIndex = items.findIndex((item) => item.productId === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    updateItems(arrayMove(items, oldIndex, newIndex));
+  };
+
   return (
     <div className="section-card">
       <h3>Bundle products</h3>
-      <p className="field-hint">Add at least two products. The first product is the primary bundle item.</p>
+      <p className="field-hint">
+        Add at least two products. Drag to reorder — the first product is the primary bundle item.
+      </p>
       <ProductPoolGrid
         selectedIds={items.map((i) => i.productId)}
         maxItems={50}
@@ -157,34 +255,70 @@ export default function EditorBundleProducts({ draft, onChange }: EditorBundlePr
         }}
       />
       <div style={{ marginTop: 16 }}>
-        {items.map((item, index) => (
-          <BundleItemCard
-            key={item.productId}
-            item={item}
-            product={productMap[item.productId]}
-            index={index}
-            total={items.length}
-            onChange={(updated) => {
-              const next = [...items];
-              const catalog = productMap[item.productId];
-              next[index] = {
-                ...updated,
-                name: updated.name ?? catalog?.name ?? item.name,
-                imageUrl: updated.imageUrl ?? catalog?.imageUrl ?? item.imageUrl,
-                price: updated.price ?? catalog?.price ?? item.price,
-              };
-              updateItems(next);
-            }}
-            onRemove={() => updateItems(items.filter((_, i) => i !== index))}
-            onMove={(dir) => {
-              const next = [...items];
-              const target = index + dir;
-              if (target < 0 || target >= next.length) return;
-              [next[index], next[target]] = [next[target]!, next[index]!];
-              updateItems(next);
-            }}
-          />
-        ))}
+        {items.length > 1 ? (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+              {items.map((item, index) => (
+                <SortableBundleItemCard
+                  key={item.productId}
+                  item={item}
+                  product={productMap[item.productId]}
+                  index={index}
+                  total={items.length}
+                  onChange={(updated) => {
+                    const next = [...items];
+                    const catalog = productMap[item.productId];
+                    next[index] = {
+                      ...updated,
+                      name: updated.name ?? catalog?.name ?? item.name,
+                      imageUrl: updated.imageUrl ?? catalog?.imageUrl ?? item.imageUrl,
+                      price: updated.price ?? catalog?.price ?? item.price,
+                    };
+                    updateItems(next);
+                  }}
+                  onRemove={() => updateItems(items.filter((_, i) => i !== index))}
+                  onMove={(dir) => {
+                    const next = [...items];
+                    const target = index + dir;
+                    if (target < 0 || target >= next.length) return;
+                    [next[index], next[target]] = [next[target]!, next[index]!];
+                    updateItems(next);
+                  }}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        ) : (
+          items.map((item, index) => (
+            <div key={item.productId} style={{ marginBottom: 12 }}>
+              <BundleItemCard
+                item={item}
+                product={productMap[item.productId]}
+                index={index}
+                total={items.length}
+                onChange={(updated) => {
+                  const next = [...items];
+                  const catalog = productMap[item.productId];
+                  next[index] = {
+                    ...updated,
+                    name: updated.name ?? catalog?.name ?? item.name,
+                    imageUrl: updated.imageUrl ?? catalog?.imageUrl ?? item.imageUrl,
+                    price: updated.price ?? catalog?.price ?? item.price,
+                  };
+                  updateItems(next);
+                }}
+                onRemove={() => updateItems(items.filter((_, i) => i !== index))}
+                onMove={(dir) => {
+                  const next = [...items];
+                  const target = index + dir;
+                  if (target < 0 || target >= next.length) return;
+                  [next[index], next[target]] = [next[target]!, next[index]!];
+                  updateItems(next);
+                }}
+              />
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

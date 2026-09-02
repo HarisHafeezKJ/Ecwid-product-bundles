@@ -16,8 +16,8 @@ interface PreviewFrameProps {
 
 export default function PreviewFrame({ device, onDeviceChange, children }: PreviewFrameProps) {
   return (
-    <div className="card" style={{ position: 'sticky', top: 'calc(var(--pb-header-h) + 16px)' }}>
-      <div className="card-header">
+    <div className="card editor-preview">
+      <div className="card-header editor-preview-header">
         <strong>Live Store Preview</strong>
         <div className="segmented">
           {(['desktop', 'tablet', 'mobile'] as PreviewDevice[]).map((d) => (
@@ -32,16 +32,10 @@ export default function PreviewFrame({ device, onDeviceChange, children }: Previ
           ))}
         </div>
       </div>
-      <div className="card-body" style={{ display: 'flex', justifyContent: 'center' }}>
+      <div className="card-body editor-preview-body">
         <div
-          style={{
-            width: WIDTHS[device],
-            maxWidth: '100%',
-            border: '1px solid var(--pb-border)',
-            borderRadius: 12,
-            overflow: 'hidden',
-            background: '#fff',
-          }}
+          className="editor-preview-device"
+          style={{ width: WIDTHS[device] }}
         >
           {children}
         </div>

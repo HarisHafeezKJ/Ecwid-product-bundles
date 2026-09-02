@@ -8,8 +8,11 @@ import {
   bundleLineSale,
   exactVolumeUnitPrice,
   isTierDiscountable,
+  normalizeWidgetStyleForStorefront,
   volumeUnitPrice,
 } from '@pb/shared';
+
+export { normalizeWidgetStyleForStorefront };
 
 export type {
   SerializedStorefrontWidgetView,
@@ -110,31 +113,6 @@ function mapVolumeTiers(rule: BundleRule, unitPrice: number): SerializedVolumeTi
   });
 }
 
-/** Map admin/shared widget style keys to storefront field names. */
-export function normalizeWidgetStyleForStorefront(style: WidgetStyle | undefined): WidgetStyle {
-  const s = { ...(style ?? {}) } as Record<string, string | number | boolean | undefined>;
-
-  const alias = (from: string, to: string) => {
-    if (s[from] != null && s[to] == null) s[to] = s[from];
-  };
-
-  alias('offerCardSelectedBg', 'offerSelectedBg');
-  alias('offerCardSelectedBorder', 'offerSelectedBorder');
-  alias('buyAllColor', 'buyAllAtColor');
-  alias('buyAllSize', 'buyAllAtSize');
-  alias('buyAllPriceColor', 'buyAllAtPriceColor');
-  alias('buyAllPriceSize', 'buyAllAtPriceSize');
-  alias('buyAllTagColor', 'buyAllAtTagColor');
-  alias('buyAllTagSize', 'buyAllAtTagSize');
-  alias('variationColor', 'variantSelectColor');
-  alias('qtyPromptText', 'mixCtaSelectMore');
-  alias('addToCartText', 'mixCtaAdd');
-
-  const divider = s.productDivider ?? s.dividerStyle;
-  if (divider != null && s.divider == null) s.divider = divider;
-
-  return s as WidgetStyle;
-}
 
 export function serializeWidgetView(
   view: StorefrontWidgetView,

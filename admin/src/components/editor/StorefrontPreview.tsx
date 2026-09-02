@@ -1,5 +1,25 @@
-import { bundleLineSale, formatMoney } from '@pb/shared';
-import { mixCtaLabel } from '@pb/shared';
+import { useMemo, type CSSProperties } from 'react';
+import {
+  addToCartText,
+  blockTitleText,
+  bundleLineSale,
+  bundleUsesPerUnitVariantPickers,
+  bundleVariantFieldLabel,
+  bundleVariantPickerCount,
+  buyAllAtText,
+  formatMoney,
+  mixCtaLabel,
+  normalizeWidgetStyleForStorefront,
+  summaryBuyText,
+  summarySaveText,
+  upsellSelectedText,
+  widgetStyleCssVars,
+  type BundleItem,
+  type CatalogProduct,
+  type CatalogVariant,
+  type ProductDivider,
+  type WidgetStyle,
+} from '@pb/shared';
 import { useProductMap } from '../../hooks/useProducts';
 import type { OfferDraft } from './editor-draft';
 
@@ -7,262 +27,312 @@ interface StorefrontPreviewProps {
   draft: OfferDraft;
 }
 
-function cssVars(style: OfferDraft['widgetStyle']): React.CSSProperties {
-  return {
-    ['--pb-block-title-color' as string]: style.blockTitleColor ?? '#111827',
-    ['--pb-block-title-size' as string]: `${style.blockTitleSize ?? 18}px`,
-    ['--pb-card-bg' as string]: style.offerCardBg ?? '#fff',
-    ['--pb-card-border' as string]: style.offerCardBorder ?? '#e5e7eb',
-    ['--pb-card-selected-bg' as string]: style.offerCardSelectedBg ?? '#f0fdf4',
-    ['--pb-card-selected-border' as string]: style.offerCardSelectedBorder ?? '#22c55e',
-    ['--pb-title-color' as string]: style.offerTitleColor ?? '#111827',
-    ['--pb-price-color' as string]: style.priceColor ?? '#111827',
-    ['--pb-cta-bg' as string]: style.ctaBg ?? '#111827',
-    ['--pb-cta-color' as string]: style.ctaColor ?? '#fff',
-    ['--pb-mix-card-bg' as string]: style.mixCardBg ?? '#fff',
-    ['--pb-mix-summary-bg' as string]: style.mixSummaryBg ?? '#f9fafb',
-  };
+function previewStyleVars(style: WidgetStyle): CSSProperties {
+  const normalized = normalizeWidgetStyleForStorefront(style);
+  return widgetStyleCssVars(normalized) as CSSProperties;
+}
+
+function PreviewShell({ children }: { children: React.ReactNode }) {
+  return <div className="pb-product-bundles">{children}</div>;
+}
+
+function ProductImage({ src, alt }: { src?: string; alt: string }) {
+  if (src) {
+    return <img className="pb-product__img" src={src} alt={alt} width={72} height={72} loading="lazy" />;
+  }
+  return <div className="pb-product__img pb-product__img--empty" aria-hidden="true" />;
+}
+
+function BundleDivider({ divider }: { divider: ProductDivider }) {
+  return (
+    <div
+      className={`pb-bundle__divider pb-bundle__divider--${divider.toLowerCase()}`}
+      aria-hidden="true"
+    />
+  );
+}
+
+function variantOptionLabel(variant: CatalogVariant): string {
+  const parts = Object.values(variant.options ?? {}).filter(Boolean);
+  return parts.join(' / ') || variant.id;
+}
+
+function BundleVariantFields({
+  item,
+  product,
+  style,
+}: {
+  item: BundleItem;
+  product?: CatalogProduct;
+  style: WidgetStyle;
+}) {
+  const variants = product?.variants ?? [];
+  const pickerItem = { ...item, variants };
+  const pickerCount = bundleVariantPickerCount(pickerItem);
+  if (pickerCount === 0) return null;
+
+  const perUnit = bundleUsesPerUnitVariantPickers(pickerItem);
+  const locked = !!item.adminLocksVariant;
+  const variantLabel = typeof style.variantLabel === 'string' ? style.variantLabel : 'Variation';
+  const defaultId = item.defaultVariantId ?? variants.find((v) => v.inStock)?.id ?? variants[0]?.id;
+
+  return (
+    <div className="pb-product__variants">
+      {Array.from({ length: pickerCount }, (_, u) => {
+        const unitIndex = perUnit ? u : 0;
+        const fieldLabel = bundleVariantFieldLabel(variantLabel, unitIndex, pickerCount);
+        return (
+          <label key={u} className="pb-variant" htmlFor={`pb-preview-var-${item.productId}-${u}`}>
+            <span className="pb-variant__label">{fieldLabel}</span>
+            <select
+              className="pb-variant__select"
+              id={`pb-preview-var-${item.productId}-${u}`}
+              defaultValue={defaultId}
+              disabled={locked}
+              aria-disabled={locked}
+            >
+              {variants.map((variant) => {
+                const label = variantOptionLabel(variant);
+                return (
+                  <option key={variant.id} value={variant.id} disabled={!variant.inStock}>
+                    {variant.inStock ? label : `${label} (out of stock)`}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function StorefrontPreview({ draft }: StorefrontPreviewProps) {
-  const style = draft.widgetStyle;
-  const vars = cssVars(style);
+  const rawStyle = draft.widgetStyle;
+  const style = useMemo(() => normalizeWidgetStyleForStorefront(rawStyle), [rawStyle]);
+  const vars = useMemo(() => previewStyleVars(rawStyle), [rawStyle]);
   const bundleItemIds =
     draft.ruleType === 'FIXED_BUNDLE' ? draft.items.components.map((item) => item.productId) : [];
   const mixItemIds =
     draft.ruleType === 'MIX_AND_MATCH' ? draft.items.components.map((item) => item.productId) : [];
+  const upsellItemIds = draft.ruleType === 'CART_UPSELL' ? draft.suggestedProductIds.slice(0, 4) : [];
   const bundleProductMap = useProductMap(bundleItemIds);
   const mixProductMap = useProductMap(mixItemIds);
+  const upsellProductMap = useProductMap(upsellItemIds);
 
   if (draft.ruleType === 'VOLUME_DISCOUNT') {
     const tiers = draft.volumeTiers.tiers;
+    const layout = draft.layout ?? style.layout ?? 'VERTICAL';
     return (
-      <div style={{ padding: 16, ...vars, fontFamily: 'var(--pb-font)' }}>
-        <h3 style={{ margin: '0 0 12px', color: 'var(--pb-block-title-color)', fontSize: 'var(--pb-block-title-size)' }}>
-          {style.blockTitle}
-        </h3>
-        <div style={{ display: 'flex', flexDirection: draft.layout === 'HORIZONTAL' ? 'row' : 'column', gap: 10 }}>
-          {tiers.map((tier, i) => (
-            <label
-              key={i}
-              style={{
-                display: 'block',
-                padding: 12,
-                border: `2px solid ${i === 0 ? 'var(--pb-card-selected-border)' : 'var(--pb-card-border)'}`,
-                background: i === 0 ? 'var(--pb-card-selected-bg)' : 'var(--pb-card-bg)',
-                borderRadius: 10,
-                flex: 1,
-              }}
-            >
-              <div style={{ fontWeight: 700, color: 'var(--pb-title-color)' }}>{tier.title}</div>
-              <div style={{ color: 'var(--pb-price-color)', marginTop: 4 }}>
-                Buy {tier.qty} · {tier.discountValue}
-                {tier.discountType === 'PERCENTAGE' ? '% off' : ''}
-              </div>
-            </label>
-          ))}
-        </div>
-        <button
-          type="button"
-          style={{
-            marginTop: 12,
-            width: '100%',
-            padding: '10px 14px',
-            background: 'var(--pb-cta-bg)',
-            color: 'var(--pb-cta-color)',
-            border: 'none',
-            borderRadius: 8,
-            fontWeight: 600,
-          }}
+      <PreviewShell>
+        <section
+          className={`pb-widget pb-volume pb-volume--${layout.toLowerCase()}`}
+          style={vars}
         >
-          {style.addToCartText}
-        </button>
-      </div>
+          <h3 className="pb-widget__title">{blockTitleText(style, 'Quantity offers')}</h3>
+          <div className="pb-volume__tiers" role="radiogroup" aria-label="Quantity offers">
+            {tiers.map((tier, i) => (
+              <label
+                key={i}
+                className={`pb-volume__tier${i === 0 ? ' pb-volume__tier--selected' : ''}`}
+              >
+                <input type="radio" name="pb-preview-volume-qty" defaultChecked={i === 0} readOnly />
+                <span className="pb-volume__tier-title">{tier.title ?? `${tier.qty} items`}</span>
+                <span className="pb-volume__tier-price">
+                  Buy {tier.qty} · {tier.discountValue}
+                  {tier.discountType === 'PERCENTAGE' ? '% off' : ''}
+                </span>
+              </label>
+            ))}
+          </div>
+          <div className="pb-volume__summary">
+            <span className="pb-volume__summary-buy">{summaryBuyText(style)}</span>
+            <span className="pb-volume__summary-save">{summarySaveText(style)}</span>
+          </div>
+          <button type="button" className="pb-btn pb-btn--atc">
+            {addToCartText(style)}
+          </button>
+        </section>
+      </PreviewShell>
     );
   }
 
   if (draft.ruleType === 'FIXED_BUNDLE') {
     const items = draft.items.components;
-    const productMap = bundleProductMap;
-    const original = items.reduce((sum, item) => sum + (item.price ?? 19.99) * (item.minQuantity ?? 1), 0);
-    const discounted = items.reduce(
-      (sum, item) =>
-        sum +
-        bundleLineSale(item.price ?? 19.99, draft.discountType, draft.discountValue) *
-          (item.minQuantity ?? 1),
+    const divider = (style.divider ?? style.productDivider ?? 'PLUS_LINE') as ProductDivider;
+    const original = items.reduce(
+      (sum, item) => sum + (item.price ?? productMapPrice(bundleProductMap, item)) * (item.minQuantity ?? 1),
       0,
     );
+    const discounted = items.reduce(
+      (sum, item) => {
+        const price = item.price ?? productMapPrice(bundleProductMap, item);
+        return sum + bundleLineSale(price, draft.discountType, draft.discountValue) * (item.minQuantity ?? 1);
+      },
+      0,
+    );
+    const savings = Math.max(0, original - discounted);
+
     return (
-      <div style={{ padding: 16, ...vars, fontFamily: 'var(--pb-font)' }}>
-        <h3 style={{ margin: '0 0 12px', color: 'var(--pb-block-title-color)', fontSize: 'var(--pb-block-title-size)' }}>
-          {style.blockTitle}
-        </h3>
-        {items.map((item, i) => {
-          const imageUrl = item.imageUrl ?? productMap[item.productId]?.imageUrl;
-          return (
-          <div key={item.productId} style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'center' }}>
-            {imageUrl ? (
-              <img
-                src={imageUrl}
-                alt={item.name ?? productMap[item.productId]?.name ?? `Product ${i + 1}`}
-                style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }}
-              />
-            ) : (
-              <div style={{ width: 48, height: 48, background: '#f1f5f9', borderRadius: 8 }} />
-            )}
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, color: style.productTitleColor }}>
-                {item.name ?? productMap[item.productId]?.name ?? `Product ${i + 1}`}
-              </div>
-              <div style={{ fontSize: 12, color: style.productQtyColor }}>Qty {item.minQuantity ?? 1}</div>
-            </div>
-            <div style={{ color: style.productPriceColor }}>{formatMoney(item.price ?? 19.99)}</div>
+      <PreviewShell>
+        <section className="pb-widget pb-bundle" style={vars}>
+          <h3 className="pb-widget__title">{blockTitleText(style, 'Frequently Bought Together')}</h3>
+          <div className="pb-bundle__products">
+            {items.map((item, index) => {
+              const product = bundleProductMap[item.productId];
+              const name = item.name ?? product?.name ?? `Product ${index + 1}`;
+              const imageUrl = item.imageUrl ?? product?.imageUrl;
+              const price = item.price ?? product?.price ?? 19.99;
+              const linePrice = bundleLineSale(price, draft.discountType, draft.discountValue);
+              return (
+                <div key={item.productId}>
+                  <article className="pb-product">
+                    <ProductImage src={imageUrl} alt={name} />
+                    <div className="pb-product__body">
+                      <h4 className="pb-product__title">{name}</h4>
+                      <span className="pb-product__qty">× {item.minQuantity ?? 1}</span>
+                      <span className="pb-product__price">{formatMoney(linePrice)}</span>
+                      <BundleVariantFields item={item} product={product} style={style} />
+                    </div>
+                  </article>
+                  {index < items.length - 1 ? <BundleDivider divider={divider} /> : null}
+                </div>
+              );
+            })}
           </div>
-          );
-        })}
-        <div style={{ marginTop: 8, fontWeight: 600, color: style.buyAllColor }}>
-          {style.buyAllAtText} {formatMoney(discounted)}{' '}
-          <span style={{ textDecoration: 'line-through', color: '#94a3b8', fontWeight: 400 }}>
-            {formatMoney(original)}
-          </span>
-        </div>
-        <button
-          type="button"
-          style={{
-            marginTop: 12,
-            width: '100%',
-            padding: '10px 14px',
-            background: 'var(--pb-cta-bg)',
-            color: 'var(--pb-cta-color)',
-            border: 'none',
-            borderRadius: 8,
-            fontWeight: 600,
-          }}
-        >
-          {style.addToCartText}
-        </button>
-      </div>
+          <div className="pb-bundle__summary">
+            <span className="pb-bundle__buy-all">{buyAllAtText(style)}</span>
+            <span className="pb-bundle__price">{formatMoney(discounted)}</span>
+            {original > discounted ? (
+              <span className="pb-bundle__original">{formatMoney(original)}</span>
+            ) : null}
+            {savings > 0 ? (
+              <span className="pb-bundle__tag">
+                {style.buyAllTagText ?? 'Save'} {formatMoney(savings)}
+              </span>
+            ) : null}
+          </div>
+          <button type="button" className="pb-btn pb-btn--atc">
+            {addToCartText(style, 'Add bundle to cart')}
+          </button>
+        </section>
+      </PreviewShell>
     );
   }
 
   if (draft.ruleType === 'MIX_AND_MATCH') {
     const required = draft.volumeTiers.tiers[0]?.qty ?? 2;
     const pool = draft.items.components;
+    const previewSelected = 0;
+    const mixOriginal = pool.slice(0, 2).reduce((sum, item) => sum + (item.price ?? 19.99), 0);
+    const mixDiscounted = bundleLineSale(mixOriginal, draft.discountType, draft.discountValue);
+
     return (
-      <div style={{ padding: 16, ...vars, fontFamily: 'var(--pb-font)' }}>
-        <h3 style={{ margin: '0 0 12px', color: 'var(--pb-block-title-color)', fontSize: 'var(--pb-block-title-size)' }}>
-          {style.blockTitle}
-        </h3>
-        <div className="product-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
-          {pool.slice(0, 4).map((item) => {
-            const product = mixProductMap[item.productId];
-            const imageUrl = item.imageUrl ?? product?.imageUrl;
-            const name = item.name ?? product?.name ?? 'Product';
-            return (
-            <div
-              key={item.productId}
-              style={{
-                border: `1px solid ${style.mixCardBorder ?? '#e5e7eb'}`,
-                background: 'var(--pb-mix-card-bg)',
-                borderRadius: 8,
-                padding: 8,
-              }}
-            >
-              {imageUrl ? (
-                <img
-                  src={imageUrl}
-                  alt={name}
-                  style={{ width: '100%', height: 60, borderRadius: 6, objectFit: 'cover' }}
-                />
-              ) : (
-                <div style={{ height: 60, background: '#f1f5f9', borderRadius: 6 }} />
-              )}
-              <div style={{ fontSize: 12, fontWeight: 600, marginTop: 6 }}>{name}</div>
-            </div>
-            );
-          })}
-        </div>
-        <div
-          style={{
-            marginTop: 12,
-            padding: 10,
-            background: 'var(--pb-mix-summary-bg)',
-            borderRadius: 8,
-            fontSize: 13,
-          }}
-        >
-          {style.summaryTitle ?? 'Your selection'}
-        </div>
-        <button
-          type="button"
-          style={{
-            marginTop: 12,
-            width: '100%',
-            padding: '10px 14px',
-            background: 'var(--pb-cta-bg)',
-            color: 'var(--pb-cta-color)',
-            border: 'none',
-            borderRadius: 8,
-            fontWeight: 600,
-          }}
-        >
-          {mixCtaLabel(style.qtyPromptText, required)}
-        </button>
-      </div>
+      <PreviewShell>
+        <section className="pb-widget pb-mix" style={vars}>
+          <h3 className="pb-widget__title">{blockTitleText(style, 'Mix & Match')}</h3>
+          <div className="pb-mix__products">
+            {pool.slice(0, 4).map((item, index) => {
+              const product = mixProductMap[item.productId];
+              const name = item.name ?? product?.name ?? 'Product';
+              const imageUrl = item.imageUrl ?? product?.imageUrl;
+              const price = item.price ?? product?.price ?? 19.99;
+              return (
+                <article
+                  key={item.productId}
+                  className={`pb-product pb-mix__product${index === 0 ? ' pb-mix__product--selected' : ''}`}
+                >
+                  <ProductImage src={imageUrl} alt={name} />
+                  <div className="pb-product__body">
+                    <h4 className="pb-product__title">{name}</h4>
+                    <span className="pb-product__price">{formatMoney(price)}</span>
+                    <div className="pb-qty-stepper" aria-hidden="true">
+                      <button type="button" className="pb-qty-stepper__btn" tabIndex={-1}>
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        className="pb-qty-stepper__input"
+                        value={index === 0 ? 1 : 0}
+                        readOnly
+                        tabIndex={-1}
+                      />
+                      <button type="button" className="pb-qty-stepper__btn" tabIndex={-1}>
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          <div className="pb-mix__summary">
+            <span className="pb-mix__total">{formatMoney(mixDiscounted)}</span>
+            {mixOriginal > mixDiscounted ? (
+              <span className="pb-mix__original">{formatMoney(mixOriginal)}</span>
+            ) : null}
+          </div>
+          <button type="button" className="pb-btn pb-btn--atc" disabled={previewSelected < required}>
+            {previewSelected >= required
+              ? addToCartText(style)
+              : mixCtaLabel(
+                  asCopyField(style.mixCtaSelectMore) ?? asCopyField(style.qtyPromptText),
+                  required - previewSelected,
+                )}
+          </button>
+        </section>
+      </PreviewShell>
     );
   }
 
   const suggested = draft.suggestedProductIds.slice(0, 3);
+  const selectedCount = suggested.length > 0 ? 1 : 0;
+
   return (
-    <div style={{ padding: 16, ...vars, fontFamily: 'var(--pb-font)' }}>
-      <h3 style={{ margin: '0 0 12px', color: 'var(--pb-block-title-color)', fontSize: 'var(--pb-block-title-size)' }}>
-        {style.blockTitle}
-      </h3>
-      {suggested.map((id, i) => (
-        <div
-          key={id}
-          style={{
-            display: 'flex',
-            gap: 10,
-            alignItems: 'center',
-            padding: 10,
-            border: '1px solid var(--pb-card-border)',
-            borderRadius: 8,
-            marginBottom: 8,
-          }}
-        >
-          <div style={{ width: 48, height: 48, background: '#f1f5f9', borderRadius: 8 }} />
-          <div style={{ flex: 1, fontWeight: 600 }}>Suggested product {i + 1}</div>
-          <button
-            type="button"
-            style={{
-              padding: '6px 10px',
-              background: 'var(--pb-cta-bg)',
-              color: 'var(--pb-cta-color)',
-              border: 'none',
-              borderRadius: 6,
-              fontSize: 12,
-            }}
-          >
-            {style.addToCartText}
-          </button>
+    <PreviewShell>
+      <div className="pb-upsell" style={vars}>
+        <h3 className="pb-upsell__title">{blockTitleText(style, 'Customers also bought')}</h3>
+        <div className="pb-upsell__grid">
+          {suggested.map((id, i) => {
+            const product = upsellProductMap[id];
+            const name = product?.name ?? `Suggested product ${i + 1}`;
+            const isSelected = i === 0;
+            return (
+              <article
+                key={id}
+                className={`pb-upsell__card${isSelected ? ' pb-upsell__card--selected' : ''}`}
+              >
+                {product?.imageUrl ? (
+                  <img className="pb-upsell__img" src={product.imageUrl} alt={name} loading="lazy" />
+                ) : (
+                  <div className="pb-upsell__img" aria-hidden="true" />
+                )}
+                <p className="pb-upsell__name">{name}</p>
+                <p className="pb-upsell__price">{formatMoney(product?.price ?? 19.99)}</p>
+                <button type="button" className="pb-upsell__select-btn">
+                  {isSelected ? upsellSelectedText(style) : addToCartText(style, 'Select')}
+                </button>
+              </article>
+            );
+          })}
         </div>
-      ))}
-      <button
-        type="button"
-        style={{
-          marginTop: 8,
-          width: '100%',
-          padding: '10px 14px',
-          background: style.ctaSuccessBg ?? '#16a34a',
-          color: '#fff',
-          border: 'none',
-          borderRadius: 8,
-          fontWeight: 600,
-        }}
-      >
-        Add 2 items &amp; checkout →
-      </button>
-    </div>
+        <button type="button" className="pb-upsell__checkout" disabled={selectedCount === 0}>
+          {selectedCount > 0
+            ? `Add ${selectedCount} item${selectedCount === 1 ? '' : 's'} & checkout →`
+            : 'Select items to checkout'}
+        </button>
+      </div>
+    </PreviewShell>
   );
+}
+
+function asCopyField(value: string | number | boolean | undefined): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function productMapPrice(
+  productMap: Record<string, { price?: number } | undefined>,
+  item: { productId: string; price?: number },
+): number {
+  return item.price ?? productMap[item.productId]?.price ?? 19.99;
 }

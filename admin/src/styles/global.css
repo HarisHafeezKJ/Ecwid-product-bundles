@@ -401,17 +401,66 @@ a {
   padding: 20px;
 }
 
+/* Offer editor: split-pane — settings scroll, preview stays visible */
+.editor-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--pb-header-h) - 48px);
+  max-height: calc(100vh - var(--pb-header-h) - 48px);
+  min-height: 0;
+}
+
+.editor-chrome {
+  flex-shrink: 0;
+}
+
 .editor-layout {
   display: grid;
   grid-template-columns: 1fr 380px;
   gap: 20px;
-  align-items: start;
+  flex: 1;
+  min-height: 0;
 }
 
 .editor-panel {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
+.editor-preview {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+  min-height: 0;
+}
+
+.editor-preview-header {
+  flex-shrink: 0;
+}
+
+.editor-preview-body {
+  display: flex;
+  justify-content: center;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.editor-preview-device {
+  max-width: 100%;
+  border: 1px solid var(--pb-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
 }
 
 .editor-tabs {
@@ -435,6 +484,47 @@ a {
 .editor-tabs button.active {
   color: var(--pb-primary);
   border-bottom-color: var(--pb-primary);
+}
+
+.bundle-item-card {
+  margin-bottom: 0;
+}
+
+.bundle-item-card--dragging {
+  opacity: 0.55;
+  box-shadow: var(--pb-shadow-lg);
+}
+
+.bundle-item-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-height: 56px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--pb-text-muted);
+  cursor: grab;
+  touch-action: none;
+  border-radius: var(--pb-radius-sm);
+  flex-shrink: 0;
+}
+
+.bundle-item-drag-handle:hover {
+  background: var(--pb-surface-2);
+  color: var(--pb-text);
+}
+
+.bundle-item-drag-handle:active {
+  cursor: grabbing;
+}
+
+.bundle-item-drag-handle__icon {
+  font-size: 0.875rem;
+  line-height: 1;
+  letter-spacing: -0.15em;
+  user-select: none;
 }
 
 .section-card {
@@ -671,8 +761,24 @@ a {
 }
 
 @media (max-width: 1024px) {
+  .editor-page {
+    height: auto;
+    max-height: none;
+  }
+
+  .editor-panel {
+    overflow-y: visible;
+    padding-right: 0;
+  }
+
   .editor-layout {
     grid-template-columns: 1fr;
+  }
+
+  .editor-preview {
+    position: sticky;
+    top: calc(var(--pb-header-h) + 16px);
+    max-height: calc(100vh - var(--pb-header-h) - 32px);
   }
 }
 

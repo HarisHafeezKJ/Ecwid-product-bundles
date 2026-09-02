@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import App, { CreateOfferRoute, DashboardRoute, EditOfferRoute } from './App';
 import './styles/global.css';
+import '../../storefront/src/styles/widget.css';
+import '../../storefront/src/styles/cart-upsell.css';
 
 // A data router (rather than BrowserRouter) is required for useBlocker, which backs
 // the unsaved-changes guard in the offer editor.

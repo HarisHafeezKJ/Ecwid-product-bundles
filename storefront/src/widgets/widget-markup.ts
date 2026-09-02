@@ -5,6 +5,11 @@ import type {
   WidgetStyle,
   BundleDivider,
 } from '../types';
+import {
+  bundleUsesPerUnitVariantPickers,
+  bundleVariantFieldLabel,
+  bundleVariantPickerCount,
+} from '@pb/shared';
 import { escapeHtml, formatMoney, replaceTokens, asCopyText } from '../utils';
 import { styleAttrFromWidgetStyle } from './widget-style-css';
 
@@ -17,15 +22,23 @@ function productImage(item: WidgetProductItem): string {
 
 function variantSelect(
   item: WidgetProductItem,
+  style: WidgetStyle,
   selectName: string,
-  unitIndex?: number,
-  locked = false,
+  unitIndex: number,
+  locked: boolean,
+  pickerCount: number,
+  perUnit = false,
 ): string {
   const variants = item.variants ?? [];
   if (variants.length <= 1) return '';
-  const suffix = unitIndex != null ? `-u${unitIndex}` : '';
+  const suffix = pickerCount > 1 ? `-u${unitIndex}` : '';
   const id = `pb-var-${item.productId}${suffix}`;
   const disabled = locked ? ' disabled' : '';
+  const fieldLabel = bundleVariantFieldLabel(
+    asCopyText(style.variantLabel, 'Variation'),
+    unitIndex,
+    pickerCount,
+  );
   const options = variants
     .map((v) => {
       const label = v.inStock
@@ -35,8 +48,24 @@ function variantSelect(
     })
     .join('');
   return `<label class="pb-variant" for="${id}">
-    <select class="pb-variant__select" id="${id}" name="${escapeHtml(selectName)}" data-product-id="${escapeHtml(item.productId)}" data-unit="${unitIndex ?? 0}"${disabled}>${options}</select>
+    <span class="pb-variant__label">${escapeHtml(fieldLabel)}</span>
+    <select class="pb-variant__select" id="${id}" name="${escapeHtml(selectName)}" data-product-id="${escapeHtml(item.productId)}" data-unit="${unitIndex}" data-per-unit="${perUnit ? 'true' : 'false'}"${disabled}>${options}</select>
   </label>`;
+}
+
+function variantSelectGroup(
+  item: WidgetProductItem,
+  style: WidgetStyle,
+  selectName: string,
+  locked: boolean,
+): string {
+  const pickerCount = bundleVariantPickerCount(item);
+  if (pickerCount === 0) return '';
+  const perUnit = bundleUsesPerUnitVariantPickers(item);
+  const pickers = Array.from({ length: pickerCount }, (_, u) =>
+    variantSelect(item, style, selectName, perUnit ? u : 0, locked, pickerCount, perUnit),
+  ).join('');
+  return `<div class="pb-product__variants">${pickers}</div>`;
 }
 
 export function volumeOfferMarkup(view: StorefrontWidgetView, selectedQty: number): string {
@@ -121,13 +150,12 @@ function bundleProductRow(
   divider: string,
 ): string {
   const price = item.discountedPrice ?? item.price;
-  const showUnits =
-    item.chooseVariationPerItem && item.minQuantity > 1 && (item.variants?.length ?? 0) > 1;
-  const variantHtml = showUnits
-    ? Array.from({ length: item.minQuantity }, (_, u) =>
-        variantSelect(item, `pb-bundle-var-${item.productId}`, u, !!item.adminLocksVariant),
-      ).join('')
-    : variantSelect(item, `pb-bundle-var-${item.productId}`, undefined, !!item.adminLocksVariant);
+  const variantHtml = variantSelectGroup(
+    item,
+    style,
+    `pb-bundle-var-${item.productId}`,
+    !!item.adminLocksVariant,
+  );
 
   const dividerHtml =
     index < total - 1 ? `<div class="pb-bundle__divider pb-bundle__divider--${divider.toLowerCase()}" aria-hidden="true"></div>` : '';
@@ -175,13 +203,13 @@ export function mixMatchMarkup(view: StorefrontWidgetView, selectedQty: number):
   </section>`;
 }
 
-function mixProductRow(item: WidgetProductItem, _style: WidgetStyle, currency: string): string {
+function mixProductRow(item: WidgetProductItem, style: WidgetStyle, currency: string): string {
   return `<article class="pb-product pb-mix__product" data-product-id="${escapeHtml(item.productId)}">
     ${productImage(item)}
     <div class="pb-product__body">
       <h4 class="pb-product__title">${escapeHtml(item.name)}</h4>
       <span class="pb-product__price">${formatMoney(item.price, currency)}</span>
-      ${variantSelect(item, `pb-mix-var-${item.productId}`)}
+      ${variantSelectGroup(item, style, `pb-mix-var-${item.productId}`, false)}
       <div class="pb-qty-stepper" data-pb-qty-stepper>
         <button type="button" class="pb-qty-stepper__btn" data-pb-qty-dec aria-label="Decrease quantity">−</button>
         <input type="number" class="pb-qty-stepper__input" data-pb-qty-input value="0" min="0" aria-label="Quantity" />
@@ -205,11 +233,12 @@ export function volumeVariantUnitsMarkup(
   qty: number,
   style: WidgetStyle,
 ): string {
-  if (!style && qty <= 1) return '';
+  const variants = item.variants ?? [];
+  if (qty <= 1 || variants.length <= 1) return '';
   const units = Array.from({ length: qty }, (_, u) =>
-    variantSelect(item, `pb-volume-var-${item.productId}`, u),
+    variantSelect(item, style, `pb-volume-var-${item.productId}`, u, false, qty, true),
   ).join('');
-  return units ? `<div class="pb-volume__variant-units">${units}</div>` : '';
+  return units ? `<div class="pb-volume__variant-units pb-product__variants">${units}</div>` : '';
 }
 
 export function widgetErrorMarkup(message: string): string {

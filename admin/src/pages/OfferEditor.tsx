@@ -86,7 +86,8 @@ export default function OfferEditor({ initialDraft, onClose, onDirtyChange }: Of
   };
 
   return (
-    <div>
+    <div className="editor-page">
+      <div className="editor-chrome">
       {restoreOffer && (
         <div className="info-banner" style={{ marginBottom: 16 }}>
           <span>You have an unsaved draft for this offer.</span>
@@ -176,6 +177,7 @@ export default function OfferEditor({ initialDraft, onClose, onDirtyChange }: Of
           </ul>
         </div>
       )}
+      </div>
 
       <div className="editor-layout">
         <div className="editor-panel">

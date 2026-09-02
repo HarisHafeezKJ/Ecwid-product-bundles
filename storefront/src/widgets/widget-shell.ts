@@ -1,3 +1,4 @@
+import { bundleUsesPerUnitVariantPickers } from '@pb/shared';
 import type { StorefrontWidgetView, VariantOption, WidgetProductItem } from '../types';
 import { addDiscounted } from '../api';
 import { cartIdFrom, getCart, refreshCart } from '../ecwid';
@@ -58,7 +59,7 @@ export function mountWidgetShell(
   container.innerHTML = html;
   const root = qs<HTMLElement>(container, '.pb-widget') ?? container;
   applyWidgetStyle(root, view.widgetStyle);
-  mirrorNativeAtcTheme(root);
+  mirrorNativeAtcTheme(root, view.widgetStyle);
   return root;
 }
 
@@ -397,7 +398,7 @@ export function collectBundleLines(
   for (const item of view.items) {
     const qty = item.minQuantity || 1;
     const hasVariants = (item.variants?.length ?? 0) > 1;
-    if (item.chooseVariationPerItem && qty > 1 && hasVariants) {
+    if (bundleUsesPerUnitVariantPickers(item)) {
       for (let u = 0; u < qty; u++) {
         const key = `${item.productId}__u${u}`;
         lines.push({
@@ -465,13 +466,15 @@ export function bindVariantSelects(
     sel.addEventListener('change', () => {
       const productId = sel.dataset.productId ?? '';
       const unit = sel.dataset.unit ?? '0';
-      const key = unit === '0' ? productId : `${productId}__u${unit}`;
+      const perUnit = sel.dataset.perUnit === 'true';
+      const key = perUnit ? `${productId}__u${unit}` : productId;
       state.variantSelections[key] = sel.value;
       onChange?.();
     });
     const productId = sel.dataset.productId ?? '';
     const unit = sel.dataset.unit ?? '0';
-    const key = unit === '0' ? productId : `${productId}__u${unit}`;
+    const perUnit = sel.dataset.perUnit === 'true';
+    const key = perUnit ? `${productId}__u${unit}` : productId;
     if (state.variantSelections[key]) sel.value = state.variantSelections[key];
   });
 }
