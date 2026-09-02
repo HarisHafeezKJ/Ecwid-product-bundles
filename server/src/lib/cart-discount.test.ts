@@ -81,11 +81,13 @@ describe('calculateCartDiscounts', () => {
       { productId: 103, quantity: 2, productPrice: 40 },
     ]);
 
-    assert.ok(exactResult.discounts.length === 1);
-    assert.ok(excessResult.discounts.length === 1);
+    assert.ok(exactResult.discounts.length === 3);
+    assert.ok(excessResult.discounts.length === 3);
+    const exactTotal = exactResult.discounts.reduce((sum, d) => sum + d.value, 0);
+    const excessTotal = excessResult.discounts.reduce((sum, d) => sum + d.value, 0);
     assert.equal(
-      excessResult.discounts[0]!.value,
-      exactResult.discounts[0]!.value,
+      excessTotal,
+      exactTotal,
       'excess units should not increase bundle savings',
     );
   });

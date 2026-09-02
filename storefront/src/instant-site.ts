@@ -1,4 +1,4 @@
-import { decodeEcwidNestedJson, parseInstantSiteContextRaw } from '@pb/shared';
+import { decodeEcwidNestedJson, parseInstantSiteContextRaw, unwrapStorageDoc } from '@pb/shared';
 
 /** Helpers for Ecwid Instant Site (company.site) product pages. */
 
@@ -91,6 +91,7 @@ export function publicConfigFromInitialState(clientId: string): Record<string, u
   const raw = configs?.[clientId];
   if (!raw) return null;
   const decoded = decodeEcwidNestedJson(raw);
-  if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) return null;
-  return decoded as Record<string, unknown>;
+  const unwrapped = unwrapStorageDoc<Record<string, unknown>>(decoded);
+  if (!unwrapped || typeof unwrapped !== 'object' || Array.isArray(unwrapped)) return null;
+  return unwrapped;
 }

@@ -5,10 +5,12 @@ import {
   discountDisplayName,
   exactVolumeTier,
   fixedBundleCompleteCount,
+  fixedBundleDiscountQty,
   isRuleEligible,
   isTierDiscountable,
   mixMatchCartQty,
   mixPoolProductIds,
+  parseBundleItems,
   uniqueVolumeRuleForProduct,
   volumeUnitPrice,
 } from '@pb/shared';
@@ -87,36 +89,39 @@ function catalogUnitPrice(
   return catalogHint ?? 0;
 }
 
-function fixedBundleDiscount(
+function fixedBundleDiscounts(
   rule: BundleRule,
   items: EcwidDiscountCartItem[],
   lines: CartQtyLine[],
-): EcwidCartDiscount | null {
+): EcwidCartDiscount[] {
   const bundleCount = fixedBundleCompleteCount(rule, lines);
-  if (bundleCount <= 0) return null;
+  if (bundleCount <= 0) return [];
 
-  const components = rule.items?.components ?? [];
-  const productIds = components.map((c) => Number(c.productId)).filter((id) => id > 0);
-  let savings = 0;
+  const components = parseBundleItems(rule.items).components;
+  const discounts: EcwidCartDiscount[] = [];
 
   for (const component of components) {
-    const minQty = Math.max(1, component.minQuantity ?? 1);
-    const qty = bundleCount * minQty;
+    const qty = fixedBundleDiscountQty(component, bundleCount);
     if (qty <= 0) continue;
     const catalogHint = component.price != null && component.price > 0 ? component.price : undefined;
     const catalog = catalogUnitPrice(items, component.productId, catalogHint);
     if (catalog <= 0) continue;
     const sale = bundleLineSale(catalog, rule.discountType, rule.discountValue);
-    savings += Math.max(0, catalog - sale) * qty;
+    const savings = Math.max(0, catalog - sale) * qty;
+    if (savings <= 0.001) continue;
+
+    const productId = Number(component.productId);
+    if (productId <= 0) continue;
+
+    discounts.push({
+      value: roundMoney(savings),
+      type: 'ABSOLUTE',
+      description: discountDisplayName(rule),
+      appliesToProducts: [productId],
+    });
   }
 
-  if (savings <= 0.001) return null;
-  return {
-    value: roundMoney(savings),
-    type: 'ABSOLUTE',
-    description: discountDisplayName(rule),
-    appliesToProducts: productIds,
-  };
+  return discounts;
 }
 
 function volumeDiscountForRule(
@@ -195,20 +200,6 @@ function mixMatchDiscount(
   };
 }
 
-function productsInEligibleFixedBundle(
-  rules: BundleRule[],
-  lines: CartQtyLine[],
-): Set<string> {
-  const covered = new Set<string>();
-  for (const rule of rules) {
-    if (rule.ruleType !== 'FIXED_BUNDLE' || !isRuleEligible(rule, lines)) continue;
-    for (const component of rule.items?.components ?? []) {
-      covered.add(component.productId);
-    }
-  }
-  return covered;
-}
-
 /** Assign each cart product to at most one volume rule (ambiguous overlaps apply none). */
 function volumeDiscountsForLines(
   volumeRules: BundleRule[],
@@ -246,17 +237,22 @@ export function calculateCartDiscounts(
 
   const active = rules.filter((r) => r.status === 'ACTIVE' && r.ruleType !== 'CART_UPSELL');
   const discounts: EcwidCartDiscount[] = [];
-  const fixedBundleProducts = productsInEligibleFixedBundle(active, lines);
+  const fixedBundleProducts = new Set<string>();
+
+  for (const rule of active) {
+    if (rule.ruleType !== 'FIXED_BUNDLE') continue;
+    const bundleDiscounts = fixedBundleDiscounts(rule, items, lines);
+    if (!bundleDiscounts.length) continue;
+    discounts.push(...bundleDiscounts);
+    for (const component of parseBundleItems(rule.items).components) {
+      fixedBundleProducts.add(component.productId);
+    }
+  }
+
   const volumeRules = active.filter((r) => r.ruleType === 'VOLUME_DISCOUNT');
   const volumeLines = lines.filter((line) => !fixedBundleProducts.has(line.productId));
 
   for (const rule of active) {
-    if (rule.ruleType === 'FIXED_BUNDLE') {
-      const discount = fixedBundleDiscount(rule, items, lines);
-      if (discount) discounts.push(discount);
-      continue;
-    }
-
     if (rule.ruleType === 'MIX_AND_MATCH') {
       const filteredLines = lines.filter((line) => !fixedBundleProducts.has(line.productId));
       const discount = mixMatchDiscount(rule, items, filteredLines);

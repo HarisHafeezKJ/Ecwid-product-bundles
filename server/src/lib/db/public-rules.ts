@@ -1,4 +1,4 @@
-import { decodeEcwidNestedJson, toBundleRule, type BundleRule } from '@pb/shared';
+import { decodeEcwidNestedJson, toBundleRule, unwrapStorageDoc, type BundleRule } from '@pb/shared';
 import type { EcwidStoreTokens } from '../ecwid.js';
 import { readPublicConfig } from '../storage/ecwid-storage.js';
 
@@ -26,8 +26,9 @@ function ruleFromPublicRow(row: unknown): BundleRule | null {
 
 function normalizePublicRules(raw: unknown): BundleRule[] {
   const decoded = decodeEcwidNestedJson(raw);
-  if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) return [];
-  const config = decoded as PublicAppConfig;
+  const unwrapped = unwrapStorageDoc<PublicAppConfig>(decoded) ?? decoded;
+  if (!unwrapped || typeof unwrapped !== 'object' || Array.isArray(unwrapped)) return [];
+  const config = unwrapped as PublicAppConfig;
   if (!Array.isArray(config.rules)) return [];
   return config.rules
     .map(ruleFromPublicRow)

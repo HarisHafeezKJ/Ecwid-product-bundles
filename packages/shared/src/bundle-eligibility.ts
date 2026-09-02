@@ -1,6 +1,11 @@
+import { parseBundleItems } from './bundle-items.js';
 import { exactVolumeTier, mixRequiredCount } from './volume-tiers.js';
 import { mixPoolProductIds } from './rule-placement.js';
 import type { BundleRule, CartQtyLine } from './types.js';
+
+function normalizeProductId(productId: string | number | null | undefined): string {
+  return String(productId ?? '').trim();
+}
 
 export function lineItemsToCartQty(lines: CartQtyLine[]): Record<string, number> {
   const map: Record<string, number> = {};
@@ -12,8 +17,9 @@ export function lineItemsToCartQty(lines: CartQtyLine[]): Record<string, number>
 }
 
 export function cartQtyForProduct(lines: CartQtyLine[], productId: string): number {
+  const target = normalizeProductId(productId);
   return lines
-    .filter((line) => line.productId === productId)
+    .filter((line) => normalizeProductId(line.productId) === target)
     .reduce((sum, line) => sum + Math.max(0, line.quantity), 0);
 }
 
@@ -57,9 +63,19 @@ function volumeRuleClaimsProduct(rule: BundleRule, productId: string): boolean {
   return targets.includes(productId);
 }
 
+/** Discounted unit count for one fixed-bundle component (complete sets × min qty). */
+export function fixedBundleDiscountQty(
+  component: { minQuantity?: number },
+  bundleCount: number,
+): number {
+  if (bundleCount <= 0) return 0;
+  const minQty = Math.max(1, component.minQuantity ?? 1);
+  return bundleCount * minQty;
+}
+
 /** Number of complete fixed-bundle sets present in the cart (limited by scarcest component). */
 export function fixedBundleCompleteCount(rule: BundleRule, lines: CartQtyLine[]): number {
-  const items = rule.items?.components ?? [];
+  const items = parseBundleItems(rule.items).components;
   if (items.length < 2) return 0;
 
   const counts = items.map((item) => {
