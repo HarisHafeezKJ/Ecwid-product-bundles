@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { discountDisplayName } from './discount-label.js';
+import { discountDisplayName, discountDisplayNameWithCount } from './discount-label.js';
 
 describe('discountDisplayName', () => {
   it('uses cartDiscountLabel when configured', () => {
@@ -28,5 +28,31 @@ describe('discountDisplayName', () => {
       widgetStyle: {},
     });
     assert.equal(label, 'Bundle Deal');
+  });
+});
+
+describe('discountDisplayNameWithCount', () => {
+  it('appends a multiplier when the deal applies more than once', () => {
+    const label = discountDisplayNameWithCount(
+      {
+        ruleType: 'FIXED_BUNDLE',
+        title: 'Lazy bundle 1',
+        widgetStyle: {},
+      },
+      3,
+    );
+    assert.equal(label, 'Lazy bundle 1 ( x3 )');
+  });
+
+  it('leaves the label unchanged when the deal applies once', () => {
+    const label = discountDisplayNameWithCount(
+      {
+        ruleType: 'FIXED_BUNDLE',
+        title: 'Lazy bundle 1',
+        widgetStyle: {},
+      },
+      1,
+    );
+    assert.equal(label, 'Lazy bundle 1');
   });
 });

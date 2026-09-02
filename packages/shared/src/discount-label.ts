@@ -19,3 +19,13 @@ export function discountDisplayName(
 
   return TYPE_DEFAULT_LABELS[rule.ruleType] ?? 'Promotion';
 }
+
+/** Cart/checkout label with optional multiplier when a deal applies more than once. */
+export function discountDisplayNameWithCount(
+  rule: Pick<BundleRule, 'ruleType' | 'title' | 'widgetStyle'>,
+  applyCount: number,
+): string {
+  const base = discountDisplayName(rule);
+  if (!base || applyCount <= 1) return base;
+  return `${base} ( x${applyCount} )`;
+}

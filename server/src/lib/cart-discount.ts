@@ -3,6 +3,7 @@ import {
   bestVolumeTier,
   bundleLineSale,
   discountDisplayName,
+  discountDisplayNameWithCount,
   exactVolumeTier,
   fixedBundleCompleteCount,
   fixedBundleDiscountQty,
@@ -120,7 +121,7 @@ function fixedBundleDiscount(
   return {
     value: roundMoney(savings),
     type: 'ABSOLUTE',
-    description: discountDisplayName(rule),
+    description: discountDisplayNameWithCount(rule, bundleCount),
     appliesToProducts: [...new Set(productIds)],
   };
 }

@@ -129,6 +129,28 @@ describe('calculateCartDiscounts', () => {
     assert.equal(result.discounts[0]?.description, 'My Bundle Offer');
   });
 
+  it('appends apply count to the discount description for multiple complete bundles', () => {
+    const rule = fixedBundleRule(
+      [
+        { productId: '101', minQuantity: 2, price: 50 },
+        { productId: '102', minQuantity: 2, price: 20 },
+        { productId: '103', minQuantity: 2, price: 40 },
+      ],
+      10,
+    );
+    rule.title = 'Lazy bundle 1';
+
+    const result = calculateCartDiscounts([rule], [
+      { productId: 101, quantity: 6, productPrice: 50 },
+      { productId: 102, quantity: 6, productPrice: 20 },
+      { productId: 103, quantity: 6, productPrice: 40 },
+    ]);
+
+    assert.equal(result.discounts.length, 1);
+    assert.equal(result.discounts[0]?.description, 'Lazy bundle 1 ( x3 )');
+    assert.ok((result.discounts[0]?.value ?? 0) > 0);
+  });
+
   it('returns no fixed bundle discount when a component is below min quantity', () => {
     const rule = fixedBundleRule([
       { productId: '101', minQuantity: 2, price: 50 },
