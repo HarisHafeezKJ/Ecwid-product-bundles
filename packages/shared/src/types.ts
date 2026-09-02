@@ -53,6 +53,8 @@ export interface VolumeTiersWrap {
 export interface WidgetStyle {
   checkoutLabel?: string;
   promoLabel?: string;
+  /** Label shown on the cart/checkout discount line for this deal. Falls back to the rule title. */
+  cartDiscountLabel?: string;
   blockTitle?: string;
   addToCartText?: string;
   addingToCartText?: string;

@@ -6,6 +6,7 @@ const HEX_COLOR = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 export const DEFAULT_WIDGET_STYLE: Readonly<WidgetStyle> = {
   checkoutLabel: '',
   promoLabel: '',
+  cartDiscountLabel: '',
   blockTitle: 'Special Offer',
   addToCartText: 'Add to Cart',
   addingToCartText: 'Adding...',
@@ -154,6 +155,7 @@ export function parseWidgetStyle(
   const stringFields: Array<keyof WidgetStyle> = [
     'checkoutLabel',
     'promoLabel',
+    'cartDiscountLabel',
     'blockTitle',
     'addToCartText',
     'addingToCartText',

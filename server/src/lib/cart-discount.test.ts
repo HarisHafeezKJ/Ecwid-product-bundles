@@ -81,15 +81,52 @@ describe('calculateCartDiscounts', () => {
       { productId: 103, quantity: 2, productPrice: 40 },
     ]);
 
-    assert.ok(exactResult.discounts.length === 3);
-    assert.ok(excessResult.discounts.length === 3);
-    const exactTotal = exactResult.discounts.reduce((sum, d) => sum + d.value, 0);
-    const excessTotal = excessResult.discounts.reduce((sum, d) => sum + d.value, 0);
+    assert.ok(exactResult.discounts.length === 1);
+    assert.ok(excessResult.discounts.length === 1);
     assert.equal(
-      excessTotal,
-      exactTotal,
+      excessResult.discounts[0]!.value,
+      exactResult.discounts[0]!.value,
       'excess units should not increase bundle savings',
     );
+    assert.equal(exactResult.discounts[0]!.description, 'Bundle Deal');
+  });
+
+  it('uses cartDiscountLabel for the checkout discount description', () => {
+    const rule = fixedBundleRule(
+      [
+        { productId: '101', minQuantity: 2, price: 50 },
+        { productId: '102', minQuantity: 2, price: 20 },
+      ],
+      10,
+    );
+    rule.title = 'My Bundle Offer';
+    rule.widgetStyle = { ...rule.widgetStyle, cartDiscountLabel: 'Combo savings' };
+
+    const result = calculateCartDiscounts([rule], [
+      { productId: 101, quantity: 2, productPrice: 50 },
+      { productId: 102, quantity: 2, productPrice: 20 },
+    ]);
+
+    assert.equal(result.discounts[0]?.description, 'Combo savings');
+  });
+
+  it('falls back to rule title for the checkout discount description', () => {
+    const rule = fixedBundleRule(
+      [
+        { productId: '101', minQuantity: 2, price: 50 },
+        { productId: '102', minQuantity: 2, price: 20 },
+      ],
+      10,
+    );
+    rule.title = 'My Bundle Offer';
+    rule.widgetStyle = { ...rule.widgetStyle, cartDiscountLabel: '' };
+
+    const result = calculateCartDiscounts([rule], [
+      { productId: 101, quantity: 2, productPrice: 50 },
+      { productId: 102, quantity: 2, productPrice: 20 },
+    ]);
+
+    assert.equal(result.discounts[0]?.description, 'My Bundle Offer');
   });
 
   it('returns no fixed bundle discount when a component is below min quantity', () => {

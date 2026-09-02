@@ -20,14 +20,17 @@ export default function EditorDetails({ draft, onChange, onStyleChange }: Editor
       <div className="grid-2">
         {showCheckoutLabel && (
           <div className="field">
-            <label htmlFor="checkout-label">Checkout promo label</label>
+            <label htmlFor="cart-discount-label">Cart discount label</label>
             <input
-              id="checkout-label"
-              value={draft.widgetStyle.checkoutLabel ?? ''}
-              onChange={(e) =>
-                onStyleChange({ checkoutLabel: e.target.value, promoLabel: e.target.value })
-              }
+              id="cart-discount-label"
+              value={draft.widgetStyle.cartDiscountLabel ?? ''}
+              placeholder={draft.title.trim() || 'Uses offer title when blank'}
+              onChange={(e) => onStyleChange({ cartDiscountLabel: e.target.value })}
             />
+            <p className="field-hint" style={{ marginTop: 6, color: '#6b7280', fontSize: 13 }}>
+              Shown on the cart and checkout discount line. Leave blank to use the offer title
+              {draft.title.trim() ? ` (“${draft.title.trim()}”).` : '.'}
+            </p>
           </div>
         )}
         {draft.ruleType === 'CART_UPSELL' && (

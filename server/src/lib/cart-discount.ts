@@ -89,16 +89,17 @@ function catalogUnitPrice(
   return catalogHint ?? 0;
 }
 
-function fixedBundleDiscounts(
+function fixedBundleDiscount(
   rule: BundleRule,
   items: EcwidDiscountCartItem[],
   lines: CartQtyLine[],
-): EcwidCartDiscount[] {
+): EcwidCartDiscount | null {
   const bundleCount = fixedBundleCompleteCount(rule, lines);
-  if (bundleCount <= 0) return [];
+  if (bundleCount <= 0) return null;
 
   const components = parseBundleItems(rule.items).components;
-  const discounts: EcwidCartDiscount[] = [];
+  const productIds: number[] = [];
+  let savings = 0;
 
   for (const component of components) {
     const qty = fixedBundleDiscountQty(component, bundleCount);
@@ -107,21 +108,21 @@ function fixedBundleDiscounts(
     const catalog = catalogUnitPrice(items, component.productId, catalogHint);
     if (catalog <= 0) continue;
     const sale = bundleLineSale(catalog, rule.discountType, rule.discountValue);
-    const savings = Math.max(0, catalog - sale) * qty;
-    if (savings <= 0.001) continue;
+    const lineSavings = Math.max(0, catalog - sale) * qty;
+    if (lineSavings <= 0) continue;
 
+    savings += lineSavings;
     const productId = Number(component.productId);
-    if (productId <= 0) continue;
-
-    discounts.push({
-      value: roundMoney(savings),
-      type: 'ABSOLUTE',
-      description: discountDisplayName(rule),
-      appliesToProducts: [productId],
-    });
+    if (productId > 0) productIds.push(productId);
   }
 
-  return discounts;
+  if (savings <= 0.001) return null;
+  return {
+    value: roundMoney(savings),
+    type: 'ABSOLUTE',
+    description: discountDisplayName(rule),
+    appliesToProducts: [...new Set(productIds)],
+  };
 }
 
 function volumeDiscountForRule(
@@ -241,9 +242,9 @@ export function calculateCartDiscounts(
 
   for (const rule of active) {
     if (rule.ruleType !== 'FIXED_BUNDLE') continue;
-    const bundleDiscounts = fixedBundleDiscounts(rule, items, lines);
-    if (!bundleDiscounts.length) continue;
-    discounts.push(...bundleDiscounts);
+    const discount = fixedBundleDiscount(rule, items, lines);
+    if (!discount) continue;
+    discounts.push(discount);
     for (const component of parseBundleItems(rule.items).components) {
       fixedBundleProducts.add(component.productId);
     }

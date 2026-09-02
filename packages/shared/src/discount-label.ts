@@ -6,14 +6,16 @@ const TYPE_DEFAULT_LABELS: Record<Exclude<BundleRule['ruleType'], 'CART_UPSELL'>
   MIX_AND_MATCH: 'Mix & Match',
 };
 
-export function discountDisplayName(rule: Pick<BundleRule, 'ruleType' | 'widgetStyle'>): string {
+export function discountDisplayName(
+  rule: Pick<BundleRule, 'ruleType' | 'title' | 'widgetStyle'>,
+): string {
   if (rule.ruleType === 'CART_UPSELL') return '';
 
-  const checkout = rule.widgetStyle?.checkoutLabel?.trim();
-  if (checkout) return checkout;
+  const cartLabel = rule.widgetStyle?.cartDiscountLabel?.trim();
+  if (cartLabel) return cartLabel;
 
-  const promo = rule.widgetStyle?.promoLabel?.trim();
-  if (promo) return promo;
+  const title = rule.title?.trim();
+  if (title) return title;
 
   return TYPE_DEFAULT_LABELS[rule.ruleType] ?? 'Promotion';
 }
