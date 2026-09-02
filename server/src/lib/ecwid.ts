@@ -91,8 +91,14 @@ function productImageUrl(raw: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
-function storefrontApiToken(tokens: EcwidStoreTokens): string {
-  return tokens.publicToken ?? tokens.accessToken;
+/**
+ * Public storefront tokens only expose products that are enabled and visible in the
+ * catalog, so reading a component through one turns a perfectly sellable bundle item
+ * into a 404. Catalog reads back both the widget and server-side pricing, so they use
+ * the private token whenever the app has one.
+ */
+function catalogApiToken(tokens: EcwidStoreTokens): string {
+  return tokens.accessToken || tokens.publicToken || '';
 }
 
 function synthesizeVariantsFromOptions(
@@ -208,7 +214,7 @@ export async function getProduct(
   try {
     const raw = await ecwidFetch<Record<string, unknown>>(
       tokens.storeId,
-      storefrontApiToken(tokens),
+      catalogApiToken(tokens),
       `/products/${productId}`,
     );
     return mapEcwidProduct(raw);
@@ -259,7 +265,7 @@ export async function searchProducts(
   });
   const data = await ecwidFetch<{ items?: Record<string, unknown>[] }>(
     tokens.storeId,
-    storefrontApiToken(tokens),
+    catalogApiToken(tokens),
     `/products?${params.toString()}`,
   );
   return (data.items ?? []).map(mapEcwidProduct);

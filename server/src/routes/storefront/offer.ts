@@ -3,7 +3,13 @@ import { incrementMonthlyViews } from '../../lib/db/settings.js';
 import { buildStorefrontWidgetViews } from '../../lib/build-widget-view.js';
 import { serializeWidgetView } from '../../lib/serialize-widget-view.js';
 import { getStoreProfile } from '../../lib/ecwid.js';
-import { CLIENT_ERRORS, corsHeaders, failResponse, jsonResponse } from '../../lib/api-response.js';
+import {
+  CLIENT_ERRORS,
+  corsHeaders,
+  failResponse,
+  isClientError,
+  jsonResponse,
+} from '../../lib/api-response.js';
 import { resolveRules } from '../../lib/storefront-rules.js';
 import { getOAuthTokens } from '../../lib/storage/oauth-cache.js';
 import { resolveStorefrontTokens } from '../../lib/storefront-tokens.js';
@@ -82,7 +88,9 @@ async function handleOffer(
   } catch (err) {
     console.error('offer route error', err);
     const message = err instanceof Error ? err.message : 'Offer failed';
-    if (CLIENT_ERRORS.has(message)) return failResponse(res, req, message, 400);
+    if (isClientError(err) || CLIENT_ERRORS.has(message)) {
+      return failResponse(res, req, message, 400);
+    }
     res.status(204).set(corsHeaders(req)).end();
   }
 }

@@ -13,6 +13,7 @@ import {
 } from '@pb/shared';
 import type { EcwidStoreTokens } from './ecwid.js';
 import { getProduct, defaultProductOptions } from './ecwid.js';
+import { ClientError } from './api-response.js';
 
 export interface PriceLineInput {
   productId: string;
@@ -30,7 +31,12 @@ async function unitPriceForProduct(
   variantOptions?: Record<string, string>;
 }> {
   const product = await getProduct(tokens, productId);
-  if (!product || !product.inStock) throw new Error('Product is not available');
+  if (!product) {
+    throw new ClientError(`Product ${productId} could not be loaded from the store catalog`);
+  }
+  if (!product.inStock) {
+    throw new ClientError(`${product.name || productId} is out of stock`);
+  }
 
   if (variantId && product.variants?.length) {
     const variant =
@@ -38,7 +44,12 @@ async function unitPriceForProduct(
       product.variants.find((v) =>
         Object.entries(v.options).some(([name, value]) => variantId === value || variantId === `${name}:${value}`),
       );
-    if (!variant || !variant.inStock) throw new Error('Product is not available');
+    if (!variant) {
+      throw new ClientError(`${product.name || productId}: option "${variantId}" is no longer available`);
+    }
+    if (!variant.inStock) {
+      throw new ClientError(`${product.name || productId}: the selected option is out of stock`);
+    }
     return {
       product,
       unitPrice: variant.price,

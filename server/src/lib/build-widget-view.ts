@@ -138,10 +138,13 @@ export async function buildWidgetViewForRule(
   const products = mergeProductsWithRuleItems(loaded, items, productIds).filter(productInStock);
   if (products.length === 0) return null;
 
+  // Stubs are built from the rule's own copy of a component, so they hide the fact that
+  // Ecwid never returned the product. A fixed bundle priced against a stub renders fine
+  // and then fails at add-to-cart, so require every component to come from the catalog.
   if (rule.ruleType === 'FIXED_BUNDLE') {
     const requiredIds = items.map((item) => item.productId).filter(Boolean);
-    const loadedIds = new Set(products.map((product) => product.id));
-    if (!requiredIds.every((id) => loadedIds.has(id))) return null;
+    const catalogIds = new Set(loaded.map((product) => product.id));
+    if (!requiredIds.every((id) => catalogIds.has(id))) return null;
   }
 
   let totals = { original: 0, discounted: 0 };

@@ -5,7 +5,13 @@ import { ensureNameYourPriceEnabled } from '../../lib/ecwid.js';
 import { pricedLinesToEcwidCartLines } from '../../lib/ecwid-cart-lines.js';
 import { priceLinesForRule, type PriceLineInput } from '../../lib/price-lines-for-rule.js';
 import { resolveStorefrontBundleRule } from '../../lib/storefront-rules.js';
-import { CLIENT_ERRORS, corsHeaders, failResponse, jsonResponse } from '../../lib/api-response.js';
+import {
+  CLIENT_ERRORS,
+  corsHeaders,
+  failResponse,
+  isClientError,
+  jsonResponse,
+} from '../../lib/api-response.js';
 import { resolveStorefrontTokens } from '../../lib/storefront-tokens.js';
 import { requireStoreId } from '../../lib/store-context.js';
 import { getOAuthTokens } from '../../lib/storage/oauth-cache.js';
@@ -103,7 +109,7 @@ addDiscountedRouter.post('/', async (req, res) => {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Could not add to cart';
-    const status = CLIENT_ERRORS.has(message) ? 400 : 500;
+    const status = isClientError(err) || CLIENT_ERRORS.has(message) ? 400 : 500;
     failResponse(res, req, message, status);
   }
 });
