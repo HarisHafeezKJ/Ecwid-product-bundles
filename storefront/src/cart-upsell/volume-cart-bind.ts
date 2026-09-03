@@ -8,10 +8,16 @@ async function runVolumeSync(): Promise<void> {
   try {
     const cart = await getCart();
     const lines = cartLineSnapshots(cart);
+    // #region agent log
+    console.warn('[pb-debug-7fcf40] runVolumeSync', { lineCount: lines.length, ts: Date.now() });
+    // #endregion
     if (!lines.length) return;
 
     const cartId = cartIdFrom(cart);
     const result = await syncVolumeCart(cartId, lines);
+    // #region agent log
+    console.warn('[pb-debug-7fcf40] runVolumeSync result', { updated: result.updated, ts: Date.now() });
+    // #endregion
     if (result.updated && result.updated > 0) {
       await refreshCart();
       document.dispatchEvent(new CustomEvent('pb-cart-changed'));

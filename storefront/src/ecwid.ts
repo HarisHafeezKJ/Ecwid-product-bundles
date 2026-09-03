@@ -142,6 +142,9 @@ export function getCart(): Promise<EcwidCart | null> {
 }
 
 export function refreshCart(): Promise<void> {
+  // #region agent log
+  console.warn('[pb-debug-7fcf40] refreshCart → calculateTotal called', { ts: Date.now(), stack: new Error().stack?.split('\n').slice(1, 4).join(' | ') });
+  // #endregion
   return withTimeout(
     new Promise((resolve) => {
       const cartApi = getEcwid()?.Cart;

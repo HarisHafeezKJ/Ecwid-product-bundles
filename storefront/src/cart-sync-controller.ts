@@ -36,6 +36,9 @@ class SharedCartSync {
   constructor() {
     this.debouncedNotify = debounce(() => {
       if (!this.started) return;
+      // #region agent log
+      console.warn('[pb-debug-7fcf40] SharedCartSync.debouncedNotify → runAll', { subscriberCount: this.subscribers.size, ts: Date.now() });
+      // #endregion
       this.runAll();
     }, 400);
   }

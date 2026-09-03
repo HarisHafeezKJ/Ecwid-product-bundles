@@ -6,14 +6,15 @@ let unsubscribe: (() => void) | null = null;
 async function runBundleCartSync(): Promise<void> {
   try {
     const cart = await getCart();
+    // #region agent log
+    console.warn('[pb-debug-7fcf40] runBundleCartSync', { itemCount: cart?.items?.length ?? 0, productIds: cart?.items?.map(i => i.product?.id ?? i.productId) ?? [], ts: Date.now() });
+    // #endregion
     if (!cart?.items?.length) return;
 
-    // A single `calculateTotal` triggers our `discountUrl` webhook, which is the
-    // supported way to attach the bundle discount to the cart. The previous
-    // implementation refreshed twice with a 350ms sleep between them, which
-    // doubled the load on Ecwid without any observed benefit — the second call
-    // returned the same result as the first once the webhook responded.
     await refreshCart();
+    // #region agent log
+    console.warn('[pb-debug-7fcf40] runBundleCartSync refreshCart done', { ts: Date.now() });
+    // #endregion
   } catch {
     /* silent */
   }
