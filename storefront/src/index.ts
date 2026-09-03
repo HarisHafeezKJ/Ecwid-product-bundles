@@ -4,6 +4,7 @@ import { resolveApiBaseUrl, setApiBaseUrl } from './api';
 import { runCartUpsell, teardownCartUpsell } from './cart-upsell/cart-upsell';
 import { startVolumeCartSync, stopVolumeCartSync } from './cart-upsell/volume-cart-bind';
 import { startBundleCartSync, stopBundleCartSync } from './bundle-cart-bind';
+import { suppressCartSyncForRemove } from './cart-sync-controller';
 import {
   cartPageLooksLikely,
   getPageType,
@@ -23,10 +24,30 @@ import cartUpsellCss from './styles/cart-upsell.css?inline';
 
 let initialized = false;
 let stopDealStampUi: (() => void) | undefined;
+let removeSuppressBound = false;
+
+const ECWID_REMOVE_SELECTORS =
+  '.ec-cart-item__delete, .ec-cart-remove-button, [data-hook="cart-item-remove"], .ecwid-cart-remove, .ec-cart-item__control--delete';
+
+function bindRemoveSuppression(): void {
+  if (removeSuppressBound) return;
+  removeSuppressBound = true;
+  document.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target.closest(ECWID_REMOVE_SELECTORS)) {
+      // #region agent log
+      console.warn('[pb-debug-7fcf40] remove click detected → suppressing sync', { ts: Date.now() });
+      // #endregion
+      suppressCartSyncForRemove();
+    }
+  }, true);
+}
 
 function enableCartSync(): void {
   startVolumeCartSync();
   startBundleCartSync();
+  bindRemoveSuppression();
 }
 
 function disableCartSync(): void {

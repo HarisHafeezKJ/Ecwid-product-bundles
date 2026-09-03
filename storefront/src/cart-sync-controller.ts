@@ -25,6 +25,8 @@ interface Subscriber {
  * container rather than `document.body` so unrelated storefront animations do
  * not cause thousands of wasted syncs per minute.
  */
+const REMOVE_SUPPRESSION_MS = 2000;
+
 class SharedCartSync {
   private started = false;
   private observer: MutationObserver | null = null;
@@ -32,15 +34,32 @@ class SharedCartSync {
   private rootPollId: number | null = null;
   private readonly subscribers = new Set<Subscriber>();
   private readonly debouncedNotify: () => void;
+  private _suppressUntil = 0;
+  private _postSuppressId: number | null = null;
 
   constructor() {
     this.debouncedNotify = debounce(() => {
       if (!this.started) return;
+      if (Date.now() < this._suppressUntil) {
+        // #region agent log
+        console.warn('[pb-debug-7fcf40] SharedCartSync SUPPRESSED', { remaining: this._suppressUntil - Date.now() });
+        // #endregion
+        return;
+      }
       // #region agent log
       console.warn('[pb-debug-7fcf40] SharedCartSync.debouncedNotify → runAll', { subscriberCount: this.subscribers.size, ts: Date.now() });
       // #endregion
       this.runAll();
     }, 400);
+  }
+
+  suppressForRemove(): void {
+    this._suppressUntil = Date.now() + REMOVE_SUPPRESSION_MS;
+    if (this._postSuppressId != null) window.clearTimeout(this._postSuppressId);
+    this._postSuppressId = window.setTimeout(() => {
+      this._postSuppressId = null;
+      if (this.started) this.runAll();
+    }, REMOVE_SUPPRESSION_MS + 100);
   }
 
   subscribe(fn: CartSyncFn, intervalMs = 12_000): () => void {
@@ -171,6 +190,15 @@ export function subscribeCartSync(
   options: CartSyncSubscriptionOptions = {},
 ): () => void {
   return sharedCartSync.subscribe(fn, options.intervalMs ?? 12_000);
+}
+
+/**
+ * Suppress sync for {@link REMOVE_SUPPRESSION_MS} so `calculateTotal` doesn't
+ * race Ecwid's native cart-item delete. A single catch-up sync runs after the
+ * window closes to reconcile badge + discounts.
+ */
+export function suppressCartSyncForRemove(): void {
+  sharedCartSync.suppressForRemove();
 }
 
 /** Test-only helper: unregister every subscriber and stop DOM listeners. */
