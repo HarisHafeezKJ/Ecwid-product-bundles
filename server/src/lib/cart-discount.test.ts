@@ -240,4 +240,87 @@ describe('calculateCartDiscounts', () => {
 
     assert.deepEqual(result.discounts, []);
   });
+
+  it('applies bundle discount when lines carry display-name stamps', () => {
+    const rule = fixedBundleRule([
+      { productId: '101', minQuantity: 2, price: 50 },
+      { productId: '102', minQuantity: 2, price: 20 },
+      { productId: '103', minQuantity: 2, price: 40 },
+    ]);
+    rule.title = 'Lazy bundle 1';
+
+    const result = calculateCartDiscounts([rule], [
+      { productId: 101, quantity: 2, productPrice: 50, options: { _pbDeal: 'Lazy bundle 1' } },
+      { productId: 102, quantity: 2, productPrice: 20, options: { _pbDeal: 'Lazy bundle 1' } },
+      { productId: 103, quantity: 2, productPrice: 40, options: { _pbDeal: 'Lazy bundle 1' } },
+    ]);
+
+    assert.equal(result.discounts.length, 1);
+    assert.ok(result.discounts[0]!.value > 0);
+    assert.ok(result.discounts[0]!.description.includes('Lazy bundle 1'));
+  });
+
+  it('applies volume discount when lines carry display-name stamps', () => {
+    const rule = volumeRule({
+      id: 'vol-hoodie',
+      title: 'Qty Break 5+',
+      applyToAllProducts: false,
+      items: { components: [{ productId: '42', minQuantity: 1, isPrimary: true }] },
+      volumeTiers: {
+        tiers: [{ qty: 5, discountType: 'PERCENTAGE', discountValue: 10, title: '5+' }],
+      },
+    });
+
+    const result = calculateCartDiscounts([rule], [
+      { productId: 42, quantity: 5, productPrice: 50, options: { _pbDeal: 'Qty Break 5+' } },
+    ]);
+
+    assert.equal(result.discounts.length, 1);
+    assert.ok(result.discounts[0]!.value > 0);
+  });
+
+  it('separates stamped bundle and volume lines for the same product', () => {
+    const bundle = fixedBundleRule([
+      { productId: '42', minQuantity: 2, price: 50 },
+      { productId: '99', minQuantity: 2, price: 20 },
+    ]);
+    bundle.title = 'Lazy bundle 1';
+
+    const volume = volumeRule({
+      id: 'vol-hoodie',
+      title: 'Lazy quantity discount deal 1',
+      applyToAllProducts: false,
+      items: { components: [{ productId: '42', minQuantity: 1, isPrimary: true }] },
+      volumeTiers: {
+        tiers: [{ qty: 5, discountType: 'PERCENTAGE', discountValue: 10, title: '5+' }],
+      },
+    });
+
+    const result = calculateCartDiscounts([bundle, volume], [
+      { productId: 42, quantity: 2, productPrice: 50, options: { _pbDeal: 'Lazy bundle 1' } },
+      { productId: 99, quantity: 2, productPrice: 20, options: { _pbDeal: 'Lazy bundle 1' } },
+      { productId: 42, quantity: 5, productPrice: 50, options: { _pbDeal: 'Lazy quantity discount deal 1' } },
+    ]);
+
+    assert.equal(result.discounts.length, 2);
+    assert.ok(result.discounts.some((d) => d.description.includes('Lazy bundle 1')));
+    assert.ok(result.discounts.some((d) => d.description.includes('Lazy quantity discount deal 1')));
+  });
+
+  it('falls back to all lines when stamps do not match any rule', () => {
+    const rule = volumeRule({
+      id: 'vol-1',
+      title: 'Volume Deal',
+      applyToAllProducts: true,
+      volumeTiers: {
+        tiers: [{ qty: 3, discountType: 'PERCENTAGE', discountValue: 15, title: '3+' }],
+      },
+    });
+
+    const result = calculateCartDiscounts([rule], [
+      { productId: 42, quantity: 3, productPrice: 20, options: { _pbDeal: 'Unknown Stamp' } },
+    ]);
+
+    assert.ok(result.discounts.length > 0, 'should still apply via fallback');
+  });
 });
