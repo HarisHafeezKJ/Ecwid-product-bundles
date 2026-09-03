@@ -61,9 +61,6 @@ export function hideDealStampFields(root: ParentNode = document): void {
       input.closest('.product-details-module__option') ??
       input.closest('.ec-cart-option') ??
       input.parentElement;
-    // #region agent log
-    fetch('http://127.0.0.1:7787/ingest/59506180-441a-4739-8e15-6cb990642ead',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7fcf40'},body:JSON.stringify({sessionId:'7fcf40',location:'deal-stamp-ui.ts:hideDealStampFields',message:'hiding _pbDeal field',data:{inputName:input.getAttribute('name'),ariaLabel:input.getAttribute('aria-label'),targetClass:(target as Element)?.className??null,alreadyHidden:(target as HTMLElement)?.style?.display==='none'},timestamp:Date.now(),hypothesisId:'H-hide-guard'})}).catch(()=>{});
-    // #endregion
     hideElement(target);
   }
 }
