@@ -115,7 +115,10 @@ function catalogUnitPrice(
 function linesForBundleRule(lines: DiscountCartLine[], rule: BundleRule): DiscountCartLine[] {
   const stamped = lines.filter((line) => line.offerId === rule.id && line.kind === 'pb-combo');
   if (stamped.length > 0) return stamped;
-  return lines.filter((line) => !line.offerId);
+  const byOffer = lines.filter((line) => line.offerId === rule.id);
+  if (byOffer.length > 0) return byOffer;
+  const unstamped = lines.filter((line) => !line.offerId);
+  return unstamped.length > 0 ? unstamped : lines;
 }
 
 function linesForMixRule(lines: DiscountCartLine[], rule: BundleRule): DiscountCartLine[] {
@@ -123,7 +126,10 @@ function linesForMixRule(lines: DiscountCartLine[], rule: BundleRule): DiscountC
     (line) => line.offerId === rule.id && (line.kind === 'pb-mix' || line.kind === 'pb-volume'),
   );
   if (stamped.length > 0) return stamped;
-  return lines.filter((line) => !line.offerId);
+  const byOffer = lines.filter((line) => line.offerId === rule.id);
+  if (byOffer.length > 0) return byOffer;
+  const unstamped = lines.filter((line) => !line.offerId);
+  return unstamped.length > 0 ? unstamped : lines;
 }
 
 function fixedBundleDiscount(
@@ -364,26 +370,33 @@ export function calculateCartDiscounts(
 
   const volumeRules = active.filter((r) => r.ruleType === 'VOLUME_DISCOUNT');
   const bundleRules = active.filter((r) => r.ruleType === 'FIXED_BUNDLE');
+  const claimedByVolume = new Set<DiscountCartLine>();
   for (const rule of volumeRules) {
-    const stampedLines = lines.filter((line) => line.offerId === rule.id && line.kind === 'pb-volume');
+    let stampedLines = lines.filter((line) => line.offerId === rule.id && line.kind === 'pb-volume');
+    if (!stampedLines.length) {
+      stampedLines = lines.filter((line) => line.offerId === rule.id);
+    }
     if (stampedLines.length > 0) {
       const discount = volumeDiscountForRule(
         rule,
         stampedLines.map((line) => line.item),
         stampedLines,
       );
-      if (discount) discounts.push(discount);
+      if (discount) {
+        discounts.push(discount);
+        for (const l of stampedLines) claimedByVolume.add(l);
+      }
     }
   }
 
-  const unstampedVolumeLines = lines.filter((line) => !line.offerId);
+  const remainingVolumeLines = lines.filter((line) => !line.offerId || !claimedByVolume.has(line));
   discounts.push(
     ...volumeDiscountsForUnstampedLines(
       volumeRules,
       bundleRules,
       lines,
-      unstampedVolumeLines.map((line) => line.item),
-      unstampedVolumeLines,
+      remainingVolumeLines.map((line) => line.item),
+      remainingVolumeLines,
     ),
   );
 

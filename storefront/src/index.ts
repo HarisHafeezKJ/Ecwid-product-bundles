@@ -27,7 +27,7 @@ let stopDealStampUi: (() => void) | undefined;
 let removeSuppressBound = false;
 
 const ECWID_REMOVE_SELECTORS =
-  '.ec-cart-item__delete, .ec-cart-remove-button, [data-hook="cart-item-remove"], .ecwid-cart-remove, .ec-cart-item__control--delete';
+  '.ec-cart-item__control-inner, .ec-cart-item__control, .ec-cart-item__delete, .ec-cart-remove-button, [data-hook="cart-item-remove"], .ecwid-cart-remove, [aria-label="Remove Item"]';
 
 function bindRemoveSuppression(): void {
   if (removeSuppressBound) return;
