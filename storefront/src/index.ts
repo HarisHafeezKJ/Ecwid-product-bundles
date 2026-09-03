@@ -17,8 +17,6 @@ import {
 } from './ecwid';
 import { initProductWidgets, teardownProductWidgets } from './product-widget';
 import { startDealStampUiGuard } from './deal-stamp-ui';
-import { correctCartBadge } from './cart-badge-fix';
-import { setCartBadgeFix } from './ecwid';
 import { isInstantSiteHost } from './instant-site';
 import type { EcwidPage } from './types';
 import { injectStyles } from './utils';
@@ -102,7 +100,6 @@ function bootstrap(): void {
   injectStyles('pb-cart-upsell-styles', cartUpsellCss);
   readScriptConfig();
   resolveApiBaseUrl();
-  setCartBadgeFix(() => void correctCartBadge());
   stopDealStampUi?.();
   stopDealStampUi = startDealStampUiGuard();
 
