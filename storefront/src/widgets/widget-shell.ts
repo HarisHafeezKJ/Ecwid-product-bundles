@@ -1,4 +1,4 @@
-import { bundleUsesPerUnitVariantPickers, ecwidCartOptions, stripDealStampFromOptionValue } from '@pb/shared';
+import { bundleUsesPerUnitVariantPickers, ecwidCartOptions, stripDealStampFromOptions, stripDealStampFromOptionValue } from '@pb/shared';
 import type { StorefrontWidgetView, VariantOption, WidgetProductItem } from '../types';
 import { addDiscounted } from '../api';
 import { cartIdFrom, getCart, refreshCart } from '../ecwid';
@@ -103,8 +103,7 @@ export async function addDiscountedAndRefresh(
 }
 
 /**
- * Fallback used when the server response is missing `ecwidLines`. Keeps variant
- * options and the hidden `_pbDeal` stamp so Ecwid treats each offer as its own line.
+ * Fallback used when the server response is missing `ecwidLines`. Sends real variant options only.
  */
 function pricedLinesToEcwidLines(lines: PricedLineResponse[]): EcwidCartLinePayload[] {
   return lines.map((line) => {
@@ -129,7 +128,10 @@ type EcwidCartApi = NonNullable<NonNullable<ReturnType<typeof getEcwid>>['Cart']
 
 interface BundleTarget {
   line: EcwidCartLinePayload;
-  variantOptions?: Record<string, string>;
+  /** Options sent to Ecwid `addProduct`. */
+  addOptions?: Record<string, string>;
+  /** Variant-only options used to verify the cart after add (stamps are not echoed back). */
+  verifyOptions?: Record<string, string>;
   wanted: number;
   /** Cart quantity before the add, matched with and without the variant options. */
   baseline: number;
@@ -167,14 +169,16 @@ async function addEcwidLines(lines: EcwidCartLinePayload[]): Promise<void> {
 
   const targets = new Map<string, BundleTarget>();
   for (const line of lines) {
-    const ecwidOptions = ecwidCartOptions(line.options);
-    const key = targetKey(line.productId, ecwidOptions);
+    const addOptions = ecwidCartOptions(line.options);
+    const verifyOptions = stripDealStampFromOptions(addOptions);
+    const key = targetKey(line.productId, verifyOptions);
     const existing = targets.get(key);
     if (existing) existing.wanted += line.quantity;
     else {
       targets.set(key, {
-        line: { ...line, options: ecwidOptions },
-        variantOptions: ecwidOptions,
+        line: { ...line, options: addOptions },
+        addOptions,
+        verifyOptions,
         wanted: line.quantity,
         baseline: 0,
         baselineAnyOption: 0,
@@ -184,7 +188,7 @@ async function addEcwidLines(lines: EcwidCartLinePayload[]): Promise<void> {
 
   const before = await getCart();
   for (const target of targets.values()) {
-    target.baseline = lineQtyInCart(before, target.line.productId, target.variantOptions);
+    target.baseline = lineQtyInCart(before, target.line.productId, target.verifyOptions);
     target.baselineAnyOption = lineQtyInCart(before, target.line.productId);
   }
 
@@ -193,7 +197,7 @@ async function addEcwidLines(lines: EcwidCartLinePayload[]): Promise<void> {
       dispatchAdd(cartApi, {
         productId: target.line.productId,
         quantity: target.wanted,
-        options: target.variantOptions,
+        options: target.addOptions,
       }),
     ),
   );
@@ -202,15 +206,13 @@ async function addEcwidLines(lines: EcwidCartLinePayload[]): Promise<void> {
   let pending = await measureShortfalls([...targets.values()], false);
   if (pending.length === 0) return;
 
-  // One recovery attempt without variant options: matches the base product, so we then
-  // have to verify by product id alone and the ignoreOptions flag is set on the next
-  // measureShortfalls call.
+  // Retry with variant options only — never omit options entirely or Ecwid merges unrelated lines.
   await Promise.all(
     pending.map(({ target, missing }) =>
       dispatchAdd(cartApi, {
         productId: target.line.productId,
         quantity: missing,
-        options: undefined,
+        options: target.verifyOptions,
       }),
     ),
   );
@@ -235,7 +237,7 @@ async function measureShortfalls(
 
   for (const target of targets) {
     const baseline = ignoreOptions ? target.baselineAnyOption : target.baseline;
-    const options = ignoreOptions ? undefined : target.variantOptions;
+    const options = ignoreOptions ? undefined : target.verifyOptions;
     const current = lineQtyInCart(cart, target.line.productId, options);
     const missing = baseline + target.wanted - current;
     if (missing > 0) shortfalls.push({ target, missing });

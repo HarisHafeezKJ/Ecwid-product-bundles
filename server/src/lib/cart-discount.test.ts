@@ -165,7 +165,7 @@ describe('calculateCartDiscounts', () => {
     assert.ok((result.discounts[0]?.value ?? 0) > 0);
   });
 
-  it('applies bundle and volume discounts on the same product when deal stamps differ', () => {
+  it('applies bundle and volume discounts on the same product in one merged cart line', () => {
     const bundle = fixedBundleRule([
       { productId: '42', minQuantity: 2, price: 50 },
       { productId: '99', minQuantity: 2, price: 20 },
@@ -182,31 +182,12 @@ describe('calculateCartDiscounts', () => {
       },
     });
 
-    const dealStamp = (offerId: string, dealId: string, kind: string) => ({
-      selectedOptions: [{ name: '_pbDeal', value: [offerId, dealId, kind].join('\x1f') }],
-    });
-
     const result = calculateCartDiscounts(
       [bundle, volume],
       [
-        {
-          productId: 42,
-          quantity: 2,
-          productPrice: 50,
-          ...dealStamp(bundle.id, `${bundle.id}:bundle`, 'pb-combo'),
-        },
-        {
-          productId: 99,
-          quantity: 2,
-          productPrice: 20,
-          ...dealStamp(bundle.id, `${bundle.id}:bundle`, 'pb-combo'),
-        },
-        {
-          productId: 42,
-          quantity: 5,
-          productPrice: 50,
-          ...dealStamp(volume.id, `${volume.id}:vol-5`, 'pb-volume'),
-        },
+        { productId: 42, quantity: 2, productPrice: 50 },
+        { productId: 99, quantity: 2, productPrice: 20 },
+        { productId: 42, quantity: 5, productPrice: 50 },
       ],
     );
 

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { BundleRule } from '@pb/shared';
 import { parseBundleItems } from '@pb/shared';
 import { pricedLinesToEcwidCartLines } from '../../lib/ecwid-cart-lines.js';
-import { ensureDealStampOption, isPrivateStoreTokens } from '../../lib/ecwid.js';
+import { isPrivateStoreTokens, removeDealStampOption } from '../../lib/ecwid.js';
 import { priceLinesForRule, type PriceLineInput } from '../../lib/price-lines-for-rule.js';
 import { resolveStorefrontBundleRule } from '../../lib/storefront-rules.js';
 import {
@@ -89,7 +89,7 @@ addDiscountedRouter.post('/', async (req, res) => {
     const privateTokens = await getOAuthTokens(storeId);
     const catalogTokens =
       privateTokens && isPrivateStoreTokens(privateTokens) ? privateTokens : tokens;
-    await ensureDealStampOption(catalogTokens, [
+    await removeDealStampOption(catalogTokens, [
       ...normalized.map((line) => line.productId),
       ...parseBundleItems(rule.items).components.map((c) => c.productId),
       rule.targetProductId,

@@ -61,20 +61,17 @@ export function stripDealStampFromOptions(
 }
 
 /**
- * Attach offer/deal metadata when adding from an offer widget.
- * Uses the `_pbDeal` TEXT option (set on add-to-cart only — not filled on the product page).
+ * Variant options for Ecwid add-to-cart. Deal metadata is applied at the cart discount
+ * webhook (bundle allocation), not via a catalog TEXT option — Ecwid renders that on the PDP
+ * and omits it from cart line options, which caused duplicate adds.
  */
 export function stampCartLineOptions(
   variantOptions: Record<string, string> | undefined,
-  offerId: string,
-  dealId?: string,
-  kind?: string,
+  _offerId?: string,
+  _dealId?: string,
+  _kind?: string,
 ): Record<string, string> | undefined {
-  const merged = {
-    ...(variantOptions ?? {}),
-    [PB_DEAL_TEXT_OPTION]: encodeDealStampValue(offerId, dealId, kind),
-  };
-  return merged;
+  return stripDealStampFromOptions(variantOptions);
 }
 
 /** @deprecated Use stampCartLineOptions */
@@ -95,13 +92,14 @@ export function stampOptions(
   return { [PB_DEAL_TEXT_OPTION]: encodeDealStampValue(offerId, dealId, kind) };
 }
 
-/** Variant + `_pbDeal` options sent to Ecwid `Cart.addProduct`. */
+/** Variant options sent to Ecwid `Cart.addProduct` (never internal stamp keys). */
 export function ecwidCartOptions(options?: Record<string, string>): Record<string, string> | undefined {
   if (!options) return undefined;
   const merged: Record<string, string> = {};
   for (const [key, value] of Object.entries(options)) {
-    if (LEGACY_STAMP_KEYS.has(key)) continue;
-    if (value) merged[key] = value;
+    if (LEGACY_STAMP_KEYS.has(key) || key === PB_DEAL_TEXT_OPTION) continue;
+    const cleaned = stripDealStampFromOptionValue(value);
+    if (cleaned) merged[key] = cleaned;
   }
   return Object.keys(merged).length > 0 ? merged : undefined;
 }
