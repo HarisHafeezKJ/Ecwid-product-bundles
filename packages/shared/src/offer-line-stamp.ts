@@ -64,15 +64,22 @@ export function stripDealStampFromOptions(
  * Variant options for Ecwid add-to-cart. Includes a `_pbDeal` TEXT option whose
  * unique value per offer keeps each deal on its own cart line. The PDP hide
  * guard ({@link startDealStampUiGuard}) prevents shoppers from seeing the field.
+ *
+ * When a human-readable `label` is provided it is used as the stamp value
+ * instead of the encoded offerId/dealId/kind — Ecwid strips the `\x1f`
+ * separator from TEXTFIELD values, so the encoded form is unusable.
  */
 export function stampCartLineOptions(
   variantOptions: Record<string, string> | undefined,
   offerId?: string,
   dealId?: string,
   kind?: string,
+  label?: string,
 ): Record<string, string> | undefined {
   const base = stripDealStampFromOptions(variantOptions) ?? {};
-  if (offerId) {
+  if (label) {
+    base[PB_DEAL_TEXT_OPTION] = label;
+  } else if (offerId) {
     base[PB_DEAL_TEXT_OPTION] = encodeDealStampValue(offerId, dealId, kind);
   }
   return Object.keys(base).length > 0 ? base : undefined;

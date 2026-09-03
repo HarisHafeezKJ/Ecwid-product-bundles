@@ -112,22 +112,28 @@ function catalogUnitPrice(
   return catalogHint ?? 0;
 }
 
+function stampMatchesRule(line: DiscountCartLine, rule: BundleRule): boolean {
+  if (line.offerId === rule.id) return true;
+  const label = discountDisplayName(rule);
+  return !!line.offerId && line.offerId === label;
+}
+
 function linesForBundleRule(lines: DiscountCartLine[], rule: BundleRule): DiscountCartLine[] {
-  const stamped = lines.filter((line) => line.offerId === rule.id && line.kind === 'pb-combo');
+  const stamped = lines.filter((line) => stampMatchesRule(line, rule) && line.kind === 'pb-combo');
   if (stamped.length > 0) return stamped;
-  const byOffer = lines.filter((line) => line.offerId === rule.id);
-  if (byOffer.length > 0) return byOffer;
+  const byLabel = lines.filter((line) => stampMatchesRule(line, rule));
+  if (byLabel.length > 0) return byLabel;
   const unstamped = lines.filter((line) => !line.offerId);
   return unstamped.length > 0 ? unstamped : lines;
 }
 
 function linesForMixRule(lines: DiscountCartLine[], rule: BundleRule): DiscountCartLine[] {
   const stamped = lines.filter(
-    (line) => line.offerId === rule.id && (line.kind === 'pb-mix' || line.kind === 'pb-volume'),
+    (line) => stampMatchesRule(line, rule) && (line.kind === 'pb-mix' || line.kind === 'pb-volume'),
   );
   if (stamped.length > 0) return stamped;
-  const byOffer = lines.filter((line) => line.offerId === rule.id);
-  if (byOffer.length > 0) return byOffer;
+  const byLabel = lines.filter((line) => stampMatchesRule(line, rule));
+  if (byLabel.length > 0) return byLabel;
   const unstamped = lines.filter((line) => !line.offerId);
   return unstamped.length > 0 ? unstamped : lines;
 }
@@ -372,9 +378,9 @@ export function calculateCartDiscounts(
   const bundleRules = active.filter((r) => r.ruleType === 'FIXED_BUNDLE');
   const claimedByVolume = new Set<DiscountCartLine>();
   for (const rule of volumeRules) {
-    let stampedLines = lines.filter((line) => line.offerId === rule.id && line.kind === 'pb-volume');
+    let stampedLines = lines.filter((line) => stampMatchesRule(line, rule) && line.kind === 'pb-volume');
     if (!stampedLines.length) {
-      stampedLines = lines.filter((line) => line.offerId === rule.id);
+      stampedLines = lines.filter((line) => stampMatchesRule(line, rule));
     }
     if (stampedLines.length > 0) {
       const discount = volumeDiscountForRule(

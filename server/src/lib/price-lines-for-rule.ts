@@ -193,7 +193,7 @@ async function priceFixedBundle(
         offerId: rule.id,
         dealId,
         promoLabel,
-        options: stampCartLineOptions(variantOptions, rule.id, dealId, 'pb-combo'),
+        options: stampCartLineOptions(variantOptions, rule.id, dealId, 'pb-combo', promoLabel),
       };
     }),
   );
@@ -251,7 +251,7 @@ async function priceVolumeDiscount(
         offerId: rule.id,
         dealId,
         promoLabel,
-        options: stampCartLineOptions(variantOptions, rule.id, dealId, 'pb-volume'),
+        options: stampCartLineOptions(variantOptions, rule.id, dealId, 'pb-volume', promoLabel),
       };
     }),
   );
@@ -293,7 +293,7 @@ async function priceMixMatch(
         offerId: rule.id,
         dealId,
         promoLabel,
-        options: stampCartLineOptions(variantOptions, rule.id, dealId, 'pb-mix'),
+        options: stampCartLineOptions(variantOptions, rule.id, dealId, 'pb-mix', promoLabel),
       };
     }),
   );
