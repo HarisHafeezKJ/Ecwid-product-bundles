@@ -171,7 +171,7 @@ async function addEcwidLines(lines: EcwidCartLinePayload[]): Promise<void> {
   for (const line of lines) {
     const addOptions = ecwidCartOptions(line.options);
     const verifyOptions = stripDealStampFromOptions(addOptions);
-    const key = targetKey(line.productId, verifyOptions);
+    const key = targetKey(line.productId, addOptions);
     const existing = targets.get(key);
     if (existing) existing.wanted += line.quantity;
     else {
@@ -192,6 +192,10 @@ async function addEcwidLines(lines: EcwidCartLinePayload[]): Promise<void> {
     target.baselineAnyOption = lineQtyInCart(before, target.line.productId);
   }
 
+  // #region agent log
+  console.warn('[pb-debug-7fcf40] addEcwidLines targets', [...targets.entries()].map(([k, t]) => ({ key: k, productId: t.line.productId, wanted: t.wanted, addOptions: t.addOptions, verifyOptions: t.verifyOptions })));
+  // #endregion
+
   await Promise.all(
     [...targets.values()].map((target) =>
       dispatchAdd(cartApi, {
@@ -202,6 +206,11 @@ async function addEcwidLines(lines: EcwidCartLinePayload[]): Promise<void> {
     ),
   );
   await refreshCart();
+
+  // #region agent log
+  const _dbgCart = await getCart();
+  console.warn('[pb-debug-7fcf40] cart after add', _dbgCart?.items?.map(i => ({ id: i.product?.id ?? i.productId, qty: i.quantity, options: i.options ?? i.selectedOptions })));
+  // #endregion
 
   let pending = await measureShortfalls([...targets.values()], false);
   if (pending.length === 0) return;

@@ -61,17 +61,21 @@ export function stripDealStampFromOptions(
 }
 
 /**
- * Variant options for Ecwid add-to-cart. Deal metadata is applied at the cart discount
- * webhook (bundle allocation), not via a catalog TEXT option — Ecwid renders that on the PDP
- * and omits it from cart line options, which caused duplicate adds.
+ * Variant options for Ecwid add-to-cart. Includes a `_pbDeal` TEXT option whose
+ * unique value per offer keeps each deal on its own cart line. The PDP hide
+ * guard ({@link startDealStampUiGuard}) prevents shoppers from seeing the field.
  */
 export function stampCartLineOptions(
   variantOptions: Record<string, string> | undefined,
-  _offerId?: string,
-  _dealId?: string,
-  _kind?: string,
+  offerId?: string,
+  dealId?: string,
+  kind?: string,
 ): Record<string, string> | undefined {
-  return stripDealStampFromOptions(variantOptions);
+  const base = stripDealStampFromOptions(variantOptions) ?? {};
+  if (offerId) {
+    base[PB_DEAL_TEXT_OPTION] = encodeDealStampValue(offerId, dealId, kind);
+  }
+  return Object.keys(base).length > 0 ? base : undefined;
 }
 
 /** @deprecated Use stampCartLineOptions */
@@ -92,12 +96,16 @@ export function stampOptions(
   return { [PB_DEAL_TEXT_OPTION]: encodeDealStampValue(offerId, dealId, kind) };
 }
 
-/** Variant options sent to Ecwid `Cart.addProduct` (never internal stamp keys). */
+/** Variant options sent to Ecwid `Cart.addProduct` — preserves `_pbDeal` for line differentiation. */
 export function ecwidCartOptions(options?: Record<string, string>): Record<string, string> | undefined {
   if (!options) return undefined;
   const merged: Record<string, string> = {};
   for (const [key, value] of Object.entries(options)) {
-    if (LEGACY_STAMP_KEYS.has(key) || key === PB_DEAL_TEXT_OPTION) continue;
+    if (LEGACY_STAMP_KEYS.has(key)) continue;
+    if (key === PB_DEAL_TEXT_OPTION) {
+      merged[key] = value;
+      continue;
+    }
     const cleaned = stripDealStampFromOptionValue(value);
     if (cleaned) merged[key] = cleaned;
   }

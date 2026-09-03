@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { BundleRule } from '@pb/shared';
 import { parseBundleItems } from '@pb/shared';
 import { pricedLinesToEcwidCartLines } from '../../lib/ecwid-cart-lines.js';
-import { isPrivateStoreTokens, removeDealStampOption } from '../../lib/ecwid.js';
+import { isPrivateStoreTokens, ensureDealStampOption } from '../../lib/ecwid.js';
 import { priceLinesForRule, type PriceLineInput } from '../../lib/price-lines-for-rule.js';
 import { resolveStorefrontBundleRule } from '../../lib/storefront-rules.js';
 import {
@@ -89,10 +89,7 @@ addDiscountedRouter.post('/', async (req, res) => {
     const privateTokens = await getOAuthTokens(storeId);
     const catalogTokens =
       privateTokens && isPrivateStoreTokens(privateTokens) ? privateTokens : tokens;
-    // #region agent log
-    fetch('http://127.0.0.1:7787/ingest/59506180-441a-4739-8e15-6cb990642ead',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7fcf40'},body:JSON.stringify({sessionId:'7fcf40',location:'add-discounted.ts:cleanup',message:'catalog cleanup attempt',data:{storeId,hasPrivateTokens:!!privateTokens,isPrivate:privateTokens?isPrivateStoreTokens(privateTokens):false,ruleId},timestamp:Date.now(),hypothesisId:'H-catalog-purge'})}).catch(()=>{});
-    // #endregion
-    await removeDealStampOption(catalogTokens, [
+    await ensureDealStampOption(catalogTokens, [
       ...normalized.map((line) => line.productId),
       ...parseBundleItems(rule.items).components.map((c) => c.productId),
       rule.targetProductId,
