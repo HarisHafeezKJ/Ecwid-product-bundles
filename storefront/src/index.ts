@@ -26,6 +26,7 @@ import cartUpsellCss from './styles/cart-upsell.css?inline';
 let initialized = false;
 let stopDealStampUi: (() => void) | undefined;
 let removeSuppressBound = false;
+let lastHandledPageType = '';
 
 const ECWID_REMOVE_SELECTORS =
   '.ec-cart-item__control-inner, .ec-cart-item__control, .ec-cart-item__delete, .ec-cart-remove-button, [data-hook="cart-item-remove"], .ecwid-cart-remove, [aria-label="Remove Item"]';
@@ -64,8 +65,12 @@ function readScriptConfig(): void {
 function handlePage(page?: EcwidPage): void {
   const pageType = getPageType(page);
   const isCart = cartPageLooksLikely(page) || pageType === 'CART';
+  const key = isCart ? 'CART' : productPageLooksLikely(page) ? 'PRODUCT' : pageType || 'OTHER';
 
-  if (productPageLooksLikely(page)) {
+  if (key === lastHandledPageType && key !== 'PRODUCT') return;
+  lastHandledPageType = key;
+
+  if (key === 'PRODUCT') {
     teardownCartUpsell();
     disableCartSync();
     void initProductWidgets(page);

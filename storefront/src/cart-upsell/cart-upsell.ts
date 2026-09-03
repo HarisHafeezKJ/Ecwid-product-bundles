@@ -22,8 +22,9 @@ let state: UpsellUiState | null = null;
 let teardownCheckout: (() => void) | null = null;
 let cartChangeBound = false;
 let lastCartPage: EcwidPage | undefined;
+let lastUpsellProductIds = '';
 
-const debouncedRefresh = debounce(() => void refreshCartUpsell(), 400);
+const debouncedRefresh = debounce(() => void refreshCartUpsell(), 800);
 
 function normalizeCartUpsellResponse(
   response: CartUpsellResponse | null,
@@ -185,9 +186,14 @@ async function renderCartUpsell(preserveSelection: boolean): Promise<void> {
   const cart = await getCart();
   const productIds = cartProductIds(cart);
   if (!productIds.length) {
+    lastUpsellProductIds = '';
     discardUpsell();
     return;
   }
+
+  const fp = productIds.slice().sort().join(',');
+  if (preserveSelection && fp === lastUpsellProductIds && state) return;
+  lastUpsellProductIds = fp;
 
   try {
     const response = await fetchCartUpsell(productIds);
@@ -282,5 +288,6 @@ export function teardownCartUpsell(): void {
   teardownCheckout?.();
   teardownCheckout = null;
   lastCartPage = undefined;
+  lastUpsellProductIds = '';
   discardUpsell();
 }

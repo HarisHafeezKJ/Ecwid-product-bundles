@@ -104,7 +104,6 @@ class SharedCartSync {
 
     document.addEventListener('change', this.onQtyChange, true);
     document.addEventListener('input', this.onQtyChange, true);
-    document.addEventListener('focusin', this.debouncedNotify);
     document.addEventListener('pb-cart-changed', this.debouncedNotify);
     window.addEventListener('pageshow', this.debouncedNotify);
 
@@ -115,7 +114,6 @@ class SharedCartSync {
     this.started = false;
     document.removeEventListener('change', this.onQtyChange, true);
     document.removeEventListener('input', this.onQtyChange, true);
-    document.removeEventListener('focusin', this.debouncedNotify);
     document.removeEventListener('pb-cart-changed', this.debouncedNotify);
     window.removeEventListener('pageshow', this.debouncedNotify);
     this.observer?.disconnect();
@@ -159,7 +157,15 @@ class SharedCartSync {
     if (this.observedRoot === root && this.observer) return;
     this.observer?.disconnect();
     this.observedRoot = root;
-    this.observer = new MutationObserver(() => this.debouncedNotify());
+    let scheduled = false;
+    this.observer = new MutationObserver(() => {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(() => {
+        scheduled = false;
+        this.debouncedNotify();
+      });
+    });
     this.observer.observe(root, { childList: true, subtree: true });
   }
 

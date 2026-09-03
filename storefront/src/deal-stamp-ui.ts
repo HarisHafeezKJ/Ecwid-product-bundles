@@ -78,13 +78,14 @@ export function startDealStampUiGuard(): () => void {
   injectHideStyles();
   hideDealStampFields();
 
-  const observer = new MutationObserver(() => hideDealStampFields());
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-
-  const interval = window.setInterval(() => hideDealStampFields(), 2000);
+  // The CSS handles ongoing hiding. Run one deferred JS sweep for late-rendered
+  // elements that CSS :has() can't target, then stop — no document-wide observer.
+  const timers = [
+    window.setTimeout(() => hideDealStampFields(), 1500),
+    window.setTimeout(() => hideDealStampFields(), 4000),
+  ];
 
   return () => {
-    observer.disconnect();
-    window.clearInterval(interval);
+    timers.forEach((t) => window.clearTimeout(t));
   };
 }
