@@ -141,9 +141,9 @@ export function getCart(): Promise<EcwidCart | null> {
   );
 }
 
-export function refreshCart(): Promise<void> {
-  return withTimeout(
-    new Promise((resolve) => {
+export async function refreshCart(): Promise<void> {
+  await withTimeout(
+    new Promise<void>((resolve) => {
       const cartApi = getEcwid()?.Cart;
       if (cartApi?.calculateTotal) {
         cartApi.calculateTotal(() => resolve());
@@ -154,6 +154,17 @@ export function refreshCart(): Promise<void> {
     CART_CALLBACK_TIMEOUT_MS,
     undefined,
   );
+  // Ecwid may show line-item count instead of total qty after calculateTotal;
+  // defer a short correction so the DOM has settled.
+  if (_badgeFix) window.setTimeout(_badgeFix, 150);
+}
+
+type BadgeFixFn = () => void;
+let _badgeFix: BadgeFixFn | null = null;
+
+/** Register the badge correction function (called once from index.ts). */
+export function setCartBadgeFix(fn: BadgeFixFn): void {
+  _badgeFix = fn;
 }
 
 export function goToCheckout(): void {

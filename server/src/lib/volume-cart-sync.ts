@@ -1,6 +1,7 @@
 import type { BundleRule, CartLineSnapshot } from '@pb/shared';
 import {
   cartQtyForProduct,
+  discountDisplayName,
   exactVolumeTier,
   isRuleEligible,
   isTierDiscountable,
@@ -82,7 +83,7 @@ export async function syncVolumeCart(
       continue;
     }
 
-    const rule = rules.find((r) => r.id === offerId);
+    const rule = rules.find((r) => r.id === offerId || discountDisplayName(r) === offerId);
     if (!rule || rule.status !== 'ACTIVE') {
       plans.push({
         lineIndex: i,
@@ -113,9 +114,10 @@ export async function syncVolumeCart(
 
     if (rule.ruleType === 'VOLUME_DISCOUNT') {
       const tiers = (rule.volumeTiers?.tiers ?? []).filter(isTierDiscountable);
+      const ruleLabel = discountDisplayName(rule);
       const offerLines = parsed.filter((row) => {
         const rowOfferId = row.offerId ?? readStampFromOptions(row.options).offerId;
-        return rowOfferId === offerId && row.productId === line.productId;
+        return (rowOfferId === offerId || rowOfferId === rule.id || rowOfferId === ruleLabel) && row.productId === line.productId;
       });
       const totalQty = offerLines.reduce((sum, row) => sum + row.quantity, 0);
       const tier = exactVolumeTier(tiers, totalQty);
