@@ -265,44 +265,16 @@ export async function ensureNameYourPriceEnabled(
   );
 }
 
-/** Ensures a hidden TEXT option exists so widget add-to-cart can stamp distinct deal lines. */
+/**
+ * @deprecated Stamp-based distinct cart lines were abandoned in science 6.
+ * _pbDeal catalog options cause a visible TEXTFIELD on Instant Site PDPs.
+ * Use {@link removeDealStampOption} to clean up any leftover options.
+ */
 export async function ensureDealStampOption(
-  tokens: EcwidStoreTokens,
-  productIds: string[],
+  _tokens: EcwidStoreTokens,
+  _productIds: string[],
 ): Promise<void> {
-  if (!isPrivateStoreTokens(tokens) || productIds.length === 0) return;
-
-  const unique = [...new Set(productIds.filter(Boolean))];
-  await Promise.all(
-    unique.map(async (productId) => {
-      try {
-        const raw = await ecwidFetch<Record<string, unknown>>(
-          tokens.storeId,
-          tokens.accessToken,
-          `/products/${productId}`,
-        );
-        const options = Array.isArray(raw.options) ? raw.options : [];
-        if (options.some((row) => (row as Record<string, unknown>).name === PB_DEAL_TEXT_OPTION)) return;
-
-        await ecwidFetch(tokens.storeId, tokens.accessToken, `/products/${productId}`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            options: [
-              ...options,
-              {
-                type: 'TEXTFIELD',
-                name: PB_DEAL_TEXT_OPTION,
-                title: ' ',
-                required: false,
-              },
-            ],
-          }),
-        });
-      } catch (err) {
-        console.warn('[pb] ensureDealStampOption failed', productId, err);
-      }
-    }),
-  );
+  console.warn('[pb] ensureDealStampOption is deprecated and no-ops — _pbDeal stamps were removed in science 6');
 }
 
 /** Remove legacy `_pbDeal` catalog options when migrating away from stamp-based lines. */
@@ -310,7 +282,15 @@ export async function removeDealStampOption(
   tokens: EcwidStoreTokens,
   productIds: string[],
 ): Promise<void> {
-  if (!isPrivateStoreTokens(tokens) || productIds.length === 0) return;
+  // #region agent log
+  const _dbg = (msg: string, data: Record<string, unknown>) => { fetch('http://127.0.0.1:7787/ingest/59506180-441a-4739-8e15-6cb990642ead',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7fcf40'},body:JSON.stringify({sessionId:'7fcf40',location:'ecwid.ts:removeDealStampOption',message:msg,data,timestamp:Date.now(),hypothesisId:'H-catalog-purge'})}).catch(()=>{}); };
+  // #endregion
+  if (!isPrivateStoreTokens(tokens) || productIds.length === 0) {
+    // #region agent log
+    _dbg('skipped — no private tokens or empty productIds', { isPrivate: isPrivateStoreTokens(tokens), count: productIds.length, storeId: tokens.storeId });
+    // #endregion
+    return;
+  }
 
   const unique = [...new Set(productIds.filter(Boolean))];
   await Promise.all(
@@ -325,13 +305,24 @@ export async function removeDealStampOption(
         const filtered = options.filter(
           (row) => (row as Record<string, unknown>).name !== PB_DEAL_TEXT_OPTION,
         );
-        if (filtered.length === options.length) return;
+        if (filtered.length === options.length) {
+          // #region agent log
+          _dbg('product already clean', { productId, optionCount: options.length });
+          // #endregion
+          return;
+        }
 
         await ecwidFetch(tokens.storeId, tokens.accessToken, `/products/${productId}`, {
           method: 'PUT',
           body: JSON.stringify({ options: filtered }),
         });
+        // #region agent log
+        _dbg('removed _pbDeal from product', { productId, before: options.length, after: filtered.length });
+        // #endregion
       } catch (err) {
+        // #region agent log
+        _dbg('removeDealStampOption failed', { productId, error: String(err) });
+        // #endregion
         console.warn('[pb] removeDealStampOption failed', productId, err);
       }
     }),

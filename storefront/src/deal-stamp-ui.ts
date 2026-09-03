@@ -7,6 +7,8 @@ const HIDE_CSS = `
 .product-details__option:has([name="${PB_DEAL_TEXT_OPTION}"]),
 .product-details__option:has([name="text"][data-option-name="${PB_DEAL_TEXT_OPTION}"]),
 .details-product-option:has([name="${PB_DEAL_TEXT_OPTION}"]),
+.details-product-option--${PB_DEAL_TEXT_OPTION},
+.details-product-option:has([aria-label="${PB_DEAL_TEXT_OPTION}"]),
 .ecwid-productOption[data-name="${PB_DEAL_TEXT_OPTION}"],
 .ec-cart-option[data-option-name="${PB_DEAL_TEXT_OPTION}"] {
   display: none !important;
@@ -21,13 +23,20 @@ function isLegacyDealStampInput(input: HTMLInputElement | HTMLTextAreaElement): 
   const name = input.getAttribute('name') ?? '';
   if (name === PB_DEAL_TEXT_OPTION || name.includes(PB_DEAL_TEXT_OPTION)) return true;
   if (input.getAttribute('data-option-name') === PB_DEAL_TEXT_OPTION) return true;
+  if (input.getAttribute('aria-label') === PB_DEAL_TEXT_OPTION) return true;
 
   const block = input.closest('.product-details__option, .details-product-option, .ecwid-productOption');
+
+  if (block?.classList.contains(`details-product-option--${PB_DEAL_TEXT_OPTION}`)) return true;
+
   const labelText = block?.querySelector('label')?.textContent?.trim().toLowerCase() ?? '';
   if (labelText === PB_DEAL_TEXT_OPTION.toLowerCase() || labelText === '_pbdeal') return true;
 
-  // Legacy `_pbDeal` used title " " — Instant Site shows "Enter your text" for empty title.
-  if (name === 'text' && labelText === 'enter your text' && !input.value.trim()) {
+  const titleEl = block?.querySelector('.details-product-option__title, [class*="product-option"][class*="title"]');
+  const titleText = titleEl?.textContent?.trim().toLowerCase() ?? '';
+  if (titleText === PB_DEAL_TEXT_OPTION.toLowerCase() || titleText === '_pbdeal') return true;
+
+  if (name === 'text' && (labelText === 'enter your text' || titleText === 'enter your text') && !input.value.trim()) {
     const optionRoot = block ?? input.parentElement;
     const hasSizeOption = !!optionRoot
       ?.closest('.product-details__options, .details-product-options, form')
@@ -45,14 +54,17 @@ export function hideDealStampFields(root: ParentNode = document): void {
   );
   for (const input of fields) {
     if (!isLegacyDealStampInput(input)) continue;
-    hideElement(
+    const target =
       input.closest('.product-details__option') ??
-        input.closest('.details-product-option') ??
-        input.closest('.ecwid-productOption') ??
-        input.closest('.product-details-module__option') ??
-        input.closest('.ec-cart-option') ??
-        input.parentElement,
-    );
+      input.closest('.details-product-option') ??
+      input.closest('.ecwid-productOption') ??
+      input.closest('.product-details-module__option') ??
+      input.closest('.ec-cart-option') ??
+      input.parentElement;
+    // #region agent log
+    fetch('http://127.0.0.1:7787/ingest/59506180-441a-4739-8e15-6cb990642ead',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7fcf40'},body:JSON.stringify({sessionId:'7fcf40',location:'deal-stamp-ui.ts:hideDealStampFields',message:'hiding _pbDeal field',data:{inputName:input.getAttribute('name'),ariaLabel:input.getAttribute('aria-label'),targetClass:(target as Element)?.className??null,alreadyHidden:(target as HTMLElement)?.style?.display==='none'},timestamp:Date.now(),hypothesisId:'H-hide-guard'})}).catch(()=>{});
+    // #endregion
+    hideElement(target);
   }
 }
 
