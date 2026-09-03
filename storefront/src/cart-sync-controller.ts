@@ -40,15 +40,7 @@ class SharedCartSync {
   constructor() {
     this.debouncedNotify = debounce(() => {
       if (!this.started) return;
-      if (Date.now() < this._suppressUntil) {
-        // #region agent log
-        console.warn('[pb-debug-7fcf40] SharedCartSync SUPPRESSED', { remaining: this._suppressUntil - Date.now() });
-        // #endregion
-        return;
-      }
-      // #region agent log
-      console.warn('[pb-debug-7fcf40] SharedCartSync.debouncedNotify → runAll', { subscriberCount: this.subscribers.size, ts: Date.now() });
-      // #endregion
+      if (Date.now() < this._suppressUntil) return;
       this.runAll();
     }, 400);
   }

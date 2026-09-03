@@ -60,18 +60,7 @@ discountWebhookRouter.post('/', async (req, res) => {
       return;
     }
 
-    // #region agent log
-    console.warn('[pb-debug-7fcf40] discount webhook items', items.slice(0, 5).map((i) => ({
-      productId: i.productId, qty: i.amount,
-      selectedOptions: i.selectedOptions, options: i.options,
-    })));
-    // #endregion
-
     const result = calculateCartDiscounts(rules, items);
-
-    // #region agent log
-    console.warn('[pb-debug-7fcf40] discount webhook result', { discountCount: result.discounts.length, discounts: result.discounts });
-    // #endregion
 
     if (items.length > 0 && result.discounts.length === 0) {
       console.warn('[pb-discount-webhook] no discounts for cart', {

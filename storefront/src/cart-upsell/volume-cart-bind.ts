@@ -3,24 +3,25 @@ import { cartIdFrom, cartLineSnapshots, getCart, refreshCart } from '../ecwid';
 import { subscribeCartSync } from '../cart-sync-controller';
 
 let unsubscribe: (() => void) | null = null;
+let lastVolumeFingerprint = '';
 
 async function runVolumeSync(): Promise<void> {
   try {
     const cart = await getCart();
     const lines = cartLineSnapshots(cart);
-    // #region agent log
-    console.warn('[pb-debug-7fcf40] runVolumeSync', { lineCount: lines.length, ts: Date.now() });
-    // #endregion
-    if (!lines.length) return;
+    if (!lines.length) {
+      lastVolumeFingerprint = '';
+      return;
+    }
+
+    const fp = lines.map((l) => `${l.productId}:${l.quantity}`).sort().join('|');
+    if (fp === lastVolumeFingerprint) return;
+    lastVolumeFingerprint = fp;
 
     const cartId = cartIdFrom(cart);
     const result = await syncVolumeCart(cartId, lines);
-    // #region agent log
-    console.warn('[pb-debug-7fcf40] runVolumeSync result', { updated: result.updated, ts: Date.now() });
-    // #endregion
     if (result.updated && result.updated > 0) {
       await refreshCart();
-      document.dispatchEvent(new CustomEvent('pb-cart-changed'));
     }
   } catch {
     /* silent — server may not be ready yet */
@@ -35,4 +36,9 @@ export function startVolumeCartSync(): void {
 export function stopVolumeCartSync(): void {
   unsubscribe?.();
   unsubscribe = null;
+}
+
+/** Invalidate cached fingerprint so the next sync cycle triggers a fresh server call. */
+export function invalidateVolumeCartFingerprint(): void {
+  lastVolumeFingerprint = '';
 }

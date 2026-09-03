@@ -3,8 +3,9 @@
 import { resolveApiBaseUrl, setApiBaseUrl } from './api';
 import { runCartUpsell, teardownCartUpsell } from './cart-upsell/cart-upsell';
 import { startVolumeCartSync, stopVolumeCartSync } from './cart-upsell/volume-cart-bind';
-import { startBundleCartSync, stopBundleCartSync } from './bundle-cart-bind';
+import { startBundleCartSync, stopBundleCartSync, invalidateBundleCartFingerprint } from './bundle-cart-bind';
 import { suppressCartSyncForRemove } from './cart-sync-controller';
+import { invalidateVolumeCartFingerprint } from './cart-upsell/volume-cart-bind';
 import {
   cartPageLooksLikely,
   getPageType,
@@ -36,10 +37,9 @@ function bindRemoveSuppression(): void {
     const target = event.target;
     if (!(target instanceof Element)) return;
     if (target.closest(ECWID_REMOVE_SELECTORS)) {
-      // #region agent log
-      console.warn('[pb-debug-7fcf40] remove click detected → suppressing sync', { ts: Date.now() });
-      // #endregion
       suppressCartSyncForRemove();
+      invalidateBundleCartFingerprint();
+      invalidateVolumeCartFingerprint();
     }
   }, true);
 }

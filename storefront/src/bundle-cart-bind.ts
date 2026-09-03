@@ -3,25 +3,38 @@ import { subscribeCartSync } from './cart-sync-controller';
 
 let unsubscribe: (() => void) | null = null;
 let hadCartItems = false;
+let lastCartFingerprint = '';
+
+function cartFingerprint(cart: { items?: { productId?: number; product?: { id?: number }; quantity?: number; options?: Record<string, string>; selectedOptions?: Record<string, string> }[] } | null): string {
+  if (!cart?.items?.length) return '';
+  return cart.items
+    .map((item) => {
+      const id = item.product?.id ?? item.productId ?? 0;
+      const opts = item.options ?? item.selectedOptions ?? {};
+      return `${id}:${item.quantity ?? 0}:${Object.entries(opts).sort().map(([k, v]) => `${k}=${v}`).join('&')}`;
+    })
+    .sort()
+    .join('|');
+}
 
 async function runBundleCartSync(): Promise<void> {
   try {
     const cart = await getCart();
     const hasItems = !!cart?.items?.length;
-    // #region agent log
-    console.warn('[pb-debug-7fcf40] runBundleCartSync', { hasItems, hadCartItems, itemCount: cart?.items?.length ?? 0, ts: Date.now() });
-    // #endregion
 
     if (!hasItems) {
       if (hadCartItems) {
         hadCartItems = false;
-        // #region agent log
-        console.warn('[pb-debug-7fcf40] cart emptied → final refreshCart for badge', { ts: Date.now() });
-        // #endregion
+        lastCartFingerprint = '';
         await refreshCart();
       }
       return;
     }
+
+    const fp = cartFingerprint(cart);
+    if (fp === lastCartFingerprint) return;
+    lastCartFingerprint = fp;
+
     hadCartItems = true;
     await refreshCart();
   } catch {
@@ -38,4 +51,9 @@ export function startBundleCartSync(): void {
 export function stopBundleCartSync(): void {
   unsubscribe?.();
   unsubscribe = null;
+}
+
+/** Invalidate cached fingerprint so the next sync cycle triggers a fresh calculateTotal. */
+export function invalidateBundleCartFingerprint(): void {
+  lastCartFingerprint = '';
 }
